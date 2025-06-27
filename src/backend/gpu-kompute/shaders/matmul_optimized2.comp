@@ -1,0 +1,55 @@
+#version 450
+
+layout(local_size_x = 16, local_size_y = 1) in;
+
+layout(push_constant) uniform PushConsts {
+    uint M;
+    uint N;
+    uint K;
+} pc;
+
+layout(set = 0, binding = 0) readonly buffer A { float a[]; };
+layout(set = 0, binding = 1) readonly buffer B { float b[]; };
+layout(set = 0, binding = 2) writeonly buffer C { float c[]; };
+
+const uint TILE_SIZE = 16;
+
+// shared memory with +1 padding to avoid bank conflicts
+shared float Asub[TILE_SIZE][TILE_SIZE + 1];
+shared float Bsub[TILE_SIZE][TILE_SIZE + 1];
+
+void main() {
+    uint globalRow = gl_GlobalInvocationID.y;
+    uint globalCol = gl_GlobalInvocationID.x;
+
+    uint localRow = gl_LocalInvocationID.y;
+    uint localCol = gl_LocalInvocationID.x;
+
+    if (globalRow >= pc.M || globalCol >= pc.N) return;
+
+    float sum = 0.0;
+
+    // Tiled matrix multiply
+    for (uint t = 0; t < (pc.K + TILE_SIZE - 1) / TILE_SIZE; ++t) {
+        uint tiledACol = t * TILE_SIZE + localCol;
+        uint tiledBRow = t * TILE_SIZE + localRow;
+
+        // A[row, k]
+        Asub[localRow][localCol] = (tiledACol < pc.K) ? a[globalRow * pc.K + tiledACol] : 0.0;
+
+        // B[k, col]
+        Bsub[localRow][localCol] = (tiledBRow < pc.K) ? b[tiledBRow * pc.N + globalCol] : 0.0;
+
+        // one barrier only
+        barrier();
+
+        #pragma unroll
+        for (uint k = 0; k < TILE_SIZE; ++k) {
+            sum = fma(Asub[localRow][k], Bsub[k][localCol], sum);
+        }
+
+        barrier(); // ensure shared reuse is safe
+    }
+
+    c[globalRow * pc.N + globalCol] = sum;
+}
