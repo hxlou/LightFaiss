@@ -18,8 +18,10 @@ void FlatIndex::addVector(const float* vecs, uint64_t n) {
     std::copy(vecs, vecs + n * dim_, data_.data() + num_ * dim_);
     
     // 预计算每个向量的Norm数据
-    for (uint64_t i = 0; i < n * dim_; ++i) {
-        dataNorm_[num_ * dim_ + i] = data_[num_ * dim_ + i] * data_[num_ * dim_ + i];
+    for (uint64_t i = 0; i < n; ++i) {
+        for (uint64_t j = 0; j < dim_; ++j) {
+            dataNorm_[num_ + i] += vecs[i * dim_ + j] * vecs[i * dim_ + j]; // 计算平方和
+        }
     }
     
     num_ += n;
@@ -56,7 +58,7 @@ void FlatIndex::query(
     if (device == DeviceType::CPU_BLAS) {
         cpu_blas::query(
             nQuery,
-            this->num_,
+            end - start,
             k,
             this->dim_,
             query,
@@ -71,7 +73,7 @@ void FlatIndex::query(
         gpu_kompute::query(
             mgr_,
             nQuery,
-            this->num_,
+            end - start,
             k,
             this->dim_,
             query,
@@ -82,5 +84,15 @@ void FlatIndex::query(
             metricType_
         );
     }
+}
 
+void FlatIndex::reconstruct(
+    uint64_t idx,
+    float* vec
+) {
+    if (idx >= num_) {
+        // 索引超出范围
+        return;
+    }
+    std::copy(data_.data() + idx * dim_, data_.data() + (idx + 1) * dim_, vec);
 }

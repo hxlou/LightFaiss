@@ -47,7 +47,10 @@ class FlatIndex
         );
 
         // 根据索引重建向量
-        void reconstruct();
+        void reconstruct(
+            uint64_t idx,
+            float* vec
+        );
 
     private:
         kp::Manager* mgr_;             // Kompute管理器

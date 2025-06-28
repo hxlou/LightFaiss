@@ -80,7 +80,7 @@ void calL2BLAS(
     std::unique_ptr<float[]> del2;
 
     // 临时储存中间结果
-    std::vector<std::pair<float, uint>> tmpSort(nx * (k + bs_y));
+    std::vector<std::pair<float, uint64_t>> tmpSort(nx * ny, std::make_pair(HUGE_VALF, 1));
 
     // 计算x的范数
     fvec_norms_L2sqr(x_norms.get(), x, dim, nx);
@@ -126,27 +126,39 @@ void calL2BLAS(
                 for (size_t j = j0; j < j1; ++j) {
                     float ip = ip_line[j - j0];
                     float d = x_norms[i] + yNorm[j] - 2 * ip;
-
-                    if (d < 0)
-                        d = 0;
-
-                    tmpSort[i * (k + bs_y) + k + j - j0] = std::make_pair(d, j);
+                    
+                    if (d < 0) {
+                        d = 0; // 确保距离非负
+                    }
+                    tmpSort[i * ny + j] = std::make_pair(d, j);
                 }
                 // 对每个i的结果进行排序
-                std::partial_sort(
-                    tmpSort.begin() + i * (k + bs_y),
-                    tmpSort.begin() + i * (k + bs_y) + k,
-                    tmpSort.begin() + (i + 1) * (k + bs_y)
-                );
+                // std::sort(
+                //     tmpSort.begin() + i * (k + bs_y),
+                //     tmpSort.begin() + (i + 1) * (k + bs_y),
+                //     [](const std::pair<float, uint64_t>& a, const std::pair<float, uint64_t>& b) {
+                //         return a.first < b.first; // 注意这里是 <，升序
+                //     }
+                // );
+
             }
         }
     }
 
     // 将结果写入输出
     for (size_t i = 0; i < nx; ++i) {
+        // 对每个i的结果进行排序
+        std::sort(
+            tmpSort.begin() + i * ny,
+            tmpSort.begin() + (i + 1) * ny,
+            [](const std::pair<float, uint64_t>& a, const std::pair<float, uint64_t>& b) {
+                return a.first < b.first; // 注意这里是 <，升序
+            }
+        );
+
         for (size_t j = 0; j < k; ++j) {
-            outDistances[i * k + j] = tmpSort[i * (k + bs_y) + j].first;
-            outIndices[i * k + j] = tmpSort[i * (k + bs_y) + j].second;
+            outDistances[i * k + j] = tmpSort[i * ny + j].first;
+            outIndices[i * k + j] = tmpSort[i * ny + j].second;
         }
     }
 } 
