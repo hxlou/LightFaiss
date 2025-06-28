@@ -107,12 +107,12 @@ void matmul (
     bool transX,
     bool transY
 ) {
-    auto shader = readSpvFile("src/backend/gpu-kompute/shader/matmul.comp");
+    auto shader = readSpvFile("src/backend/gpu-kompute/shaders/matmul.comp.spv");
 
     std::vector<uint32_t> pushConsts = {
         static_cast<uint32_t>(m),
-        static_cast<uint32_t>(k),
         static_cast<uint32_t>(n),
+        static_cast<uint32_t>(k),
         static_cast<uint32_t>(transX),
         static_cast<uint32_t>(transY)
     };
@@ -137,6 +137,15 @@ void matmul (
         ->record<kp::OpSyncLocal>({out});
     
     seq->eval();
+
+    // 输出
+    for (size_t i = 0; i < 2000; ++i) {
+        if (i > 0 && i % 20 == 0) {
+            std::cout << std::endl;
+        }
+        std::cout << out->data()[i] << " ";
+    }
+    std::cout << std::endl;
 }
 
 }

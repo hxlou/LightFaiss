@@ -21,7 +21,17 @@ void main() {
 
     float sum = 0.0;
     for (uint i = 0u; i < pc.K; i++) {
-        sum += a[row * pc.K + i] * b[i * pc.N + col];
+        // 计算A的下标
+        // 若transX=0, 正常访问 a[row * K + i]
+        // 若transX=1, 转置后访问 a[i * M + row]
+        uint a_idx = (pc.transX == 0) ? (row * pc.K + i) : (i * pc.M + row);
+
+        // 计算B的下标
+        // 若transY=0, 正常访问 b[i * N + col]
+        // 若transY=1, 转置后访问 b[col * K + i]
+        uint b_idx = (pc.transY == 0) ? (i * pc.N + col) : (col * pc.K + i);
+
+        sum += a[a_idx] * b[b_idx];
     }
 
     c[row * pc.N + col] = sum;
