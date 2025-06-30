@@ -84,8 +84,6 @@ void FlatIndex::query(
             distances,
             results,
             metricType_,
-            transX,
-            transY,
             nullptr
         );
     }

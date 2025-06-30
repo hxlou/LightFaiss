@@ -23,8 +23,6 @@ void query(
     float* distances,
     uint64_t* results,
     MetricType metricType,
-    bool transX = false,
-    bool transY = false,
     float* metricArg = nullptr
 );
 
@@ -41,9 +39,7 @@ void calL2(
     uint64_t k,
     float* outDistances,
     uint64_t* outIndices,
-    const float* yNorm = nullptr,
-    bool transX = false,
-    bool transY = false
+    const float* yNorm = nullptr
 );
 
 /*
@@ -60,9 +56,7 @@ void calIP(
     size_t k,
     float* outDistances,
     uint64_t* outIndices,
-    const float* yNorm = nullptr,
-    bool transX = false,
-    bool transY = false
+    const float* yNorm = nullptr
 );
 
 void matmul (
@@ -75,6 +69,24 @@ void matmul (
     size_t k,
     bool transX = false,
     bool transY = false
+);
+
+void vecsNorm (
+    kp::Manager* mgr,
+    std::shared_ptr<kp::TensorT<float>> vecs,
+    std::shared_ptr<kp::TensorT<float>> norms,
+    size_t n,
+    size_t dim
+);
+
+void calL2Add (
+    kp::Manager* mgr,
+    std::shared_ptr<kp::TensorT<float>> xNorm,
+    std::shared_ptr<kp::TensorT<float>> yNorm,
+    std::shared_ptr<kp::TensorT<float>> IP,
+    std::shared_ptr<kp::TensorT<float>> L2,
+    size_t nx,
+    size_t ny
 );
 
 }

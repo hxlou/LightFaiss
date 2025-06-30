@@ -19,14 +19,12 @@ void query(
     float* distances,
     uint64_t* results,
     MetricType metricType,
-    bool transX,
-    bool transY,
     float* metricArg
 ) {
     if (metricType == METRIC_L2) {
-        calL2(mgr, query, data, nQuery, nData, dim, k, distances, results, dataNorm, transX, transY);
+        calL2(mgr, query, data, nQuery, nData, dim, k, distances, results, dataNorm);
     } else if (metricType == METRIC_INNER_PRODUCT) {
-        calIP(mgr, query, data, nQuery, nData, dim, k, distances, results, dataNorm, transX, transY);
+        calIP(mgr, query, data, nQuery, nData, dim, k, distances, results, dataNorm);
     } else {
         // 其他距离计算方式可以在这里添加
         // throw std::invalid_argument("Unsupported metric type");
@@ -46,11 +44,50 @@ void calL2(
     uint64_t k,
     float* outDistances,
     uint64_t* outIndices,
-    const float* yNorm,
-    bool transX,
-    bool transY
+    const float* yNorm
 ) {
+    // xNorm yNorm IP
+    std::shared_ptr<kp::TensorT<float>> X = mgr->tensorT<float>(std::vector<float>(x, x + nx * dim));
+    std::shared_ptr<kp::TensorT<float>> Y = mgr->tensorT<float>(std::vector<float>(y, y + ny * dim));
+    std::shared_ptr<kp::TensorT<float>> IP = mgr->tensorT<float>(std::vector<float>(nx * ny, 0.0f));
+    std::shared_ptr<kp::TensorT<float>> XNorm = mgr->tensorT<float>(std::vector<float>(nx, 0.0f));
+    std::shared_ptr<kp::TensorT<float>> YNorm;
+    std::shared_ptr<kp::TensorT<float>> L2 = mgr->tensorT<float>(std::vector<float>(nx * ny, 0.0f));
 
+    // YNorm
+    if (yNorm != nullptr) {
+        YNorm = mgr->tensorT<float>(std::vector<float>(yNorm, yNorm + ny));
+    } else {
+        YNorm = mgr->tensorT<float>(std::vector<float>(ny, 0.0f));
+        vecsNorm(mgr, Y, YNorm, ny, dim);
+    }
+
+    // XNorm
+    vecsNorm(mgr, X, XNorm, nx, dim);
+
+    // IP
+    matmul(mgr, X, Y, IP, nx, ny, dim, false, true);
+
+    // 计算L2距离
+    calL2Add(mgr, XNorm, YNorm, IP, L2, nx, ny);
+
+    // 从L2中排序并赋值结果
+    std::vector<std::pair<float, uint64_t>> results(ny);
+    for (uint64_t i = 0; i < nx; ++i) {
+        for (uint64_t j = 0; j < ny; ++j) {
+            float value = L2->data()[i * ny + j];
+            results[j] = std::make_pair(value, j); // 存储距离和索引
+        }
+        std::sort(results.begin(), results.end(),
+                          [](const std::pair<float, uint64_t>& a, const std::pair<float, uint64_t>& b) {
+                              return a.first < b.first; // 升序排序
+                          });
+        // 将前k个结果写入输出
+        for (uint64_t j = 0; j < k; ++j) {
+            outDistances[i * k + j] = results[j].first;
+            outIndices[i * k + j] = results[j].second;
+        }
+    }
 
 }
 
@@ -68,16 +105,14 @@ void calIP(
     size_t k,
     float* outDistances,
     uint64_t* outIndices,
-    const float* yNorm,
-    bool transX,
-    bool transY
+    const float* yNorm
 ) {
     // 计算内积距离，使用kompute接口
     std::shared_ptr<kp::TensorT<float>> IP = mgr->tensorT<float>(std::vector<float>(nx * ny, 0.0f));
     std::shared_ptr<kp::TensorT<float>> Tx  = mgr->tensorT<float>(std::vector<float>(x, x + nx * dim));
     std::shared_ptr<kp::TensorT<float>> Ty  = mgr->tensorT<float>(std::vector<float>(y, y + ny * dim));
 
-    matmul(mgr, Tx, Ty, IP, nx, ny, dim, transX, transY);
+    matmul(mgr, Tx, Ty, IP, nx, ny, dim, false, true);
 
     // 从IP中复制结果
     std::vector<std::pair<float, uint64_t>> results(ny);
@@ -144,6 +179,32 @@ void matmul (
         ->record<kp::OpSyncLocal>({out});
     
     seq->eval();
+}
+
+void vecsNorm (
+    kp::Manager* mgr,
+    std::shared_ptr<kp::TensorT<float>> vecs,
+    std::shared_ptr<kp::TensorT<float>> norms,
+    size_t n,
+    size_t dim
+) {
+    // vecs: n * dim
+    // norms[i] = vecs[i*dim + 0] ^ 2 + ... + vecs[i * dim + (dim - 1)] ^ 2
+
+}
+
+void calL2Add (
+    kp::Manager* mgr,
+    std::shared_ptr<kp::TensorT<float>> xNorm,      // 1 * nx
+    std::shared_ptr<kp::TensorT<float>> yNorm,      // 1 * ny
+    std::shared_ptr<kp::TensorT<float>> IP,         // nx * ny
+    std::shared_ptr<kp::TensorT<float>> L2,         // nx * ny
+    size_t nx,
+    size_t ny
+) {
+    // L2 = xNorm + yNorm - 2 * IP
+    // L2[i][j] = xNorm[i] + yNorm[j] - 2 * IP[i][j]
+
 }
 
 }
