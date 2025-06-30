@@ -52,7 +52,9 @@ void FlatIndex::query(
     uint64_t nQuery,
     const float* query,
     uint64_t* results,
-    float* distances
+    float* distances,
+    bool transX,
+    bool transY
 ) {
     float* dataNorm = dataNorm_.empty() ? nullptr : dataNorm_.data();
     if (device == DeviceType::CPU_BLAS) {
@@ -81,7 +83,10 @@ void FlatIndex::query(
             dataNorm + start * dim_,
             distances,
             results,
-            metricType_
+            metricType_,
+            transX,
+            transY,
+            nullptr
         );
     }
 }

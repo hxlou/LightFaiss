@@ -19,12 +19,14 @@ void query(
     float* distances,
     uint64_t* results,
     MetricType metricType,
+    bool transX,
+    bool transY,
     float* metricArg
 ) {
     if (metricType == METRIC_L2) {
-        calL2(mgr, query, data, nQuery, nData, dim, k, distances, results, dataNorm);
+        calL2(mgr, query, data, nQuery, nData, dim, k, distances, results, dataNorm, transX, transY);
     } else if (metricType == METRIC_INNER_PRODUCT) {
-        calIP(mgr, query, data, nQuery, nData, dim, k, distances, results, dataNorm);
+        calIP(mgr, query, data, nQuery, nData, dim, k, distances, results, dataNorm, transX, transY);
     } else {
         // 其他距离计算方式可以在这里添加
         // throw std::invalid_argument("Unsupported metric type");
@@ -44,7 +46,9 @@ void calL2(
     uint64_t k,
     float* outDistances,
     uint64_t* outIndices,
-    const float* yNorm
+    const float* yNorm,
+    bool transX,
+    bool transY
 ) {
 
 
@@ -64,23 +68,27 @@ void calIP(
     size_t k,
     float* outDistances,
     uint64_t* outIndices,
-    const float* yNorm
+    const float* yNorm,
+    bool transX,
+    bool transY
 ) {
     // 计算内积距离，使用kompute接口
     std::shared_ptr<kp::TensorT<float>> IP = mgr->tensorT<float>(std::vector<float>(nx * ny, 0.0f));
     std::shared_ptr<kp::TensorT<float>> Tx  = mgr->tensorT<float>(std::vector<float>(x, x + nx * dim));
     std::shared_ptr<kp::TensorT<float>> Ty  = mgr->tensorT<float>(std::vector<float>(y, y + ny * dim));
 
-    matmul(mgr, Tx, Ty, IP, nx, k, ny, false, true);
+    matmul(mgr, Tx, Ty, IP, nx, ny, dim, transX, transY);
 
     // 从IP中复制结果
-    std::vector<std::pair<float, uint64_t>> results;
+    std::vector<std::pair<float, uint64_t>> results(ny);
     for (uint64_t i = 0; i < nx; ++i) {
+        
         for (uint64_t j = 0; j < ny; ++j) {
             float value = IP->data()[i * ny + j];
-            results.emplace_back(value, j);
+            results[j] = std::make_pair(value, j); // 存储距离和索引
         }
-        std::partial_sort(results.begin(), results.begin() + k, results.end(),
+
+        std::sort(results.begin(), results.end(),
                           [](const std::pair<float, uint64_t>& a, const std::pair<float, uint64_t>& b) {
                               return a.first > b.first; // 降序排序
                           });
@@ -90,7 +98,6 @@ void calIP(
             outDistances[i * k + j] = results[j].first;
             outIndices[i * k + j] = results[j].second;
         }
-        results.clear(); // 清空结果以便下一次使用
     }
 
     return;
@@ -137,15 +144,6 @@ void matmul (
         ->record<kp::OpSyncLocal>({out});
     
     seq->eval();
-
-    // 输出
-    for (size_t i = 0; i < 2000; ++i) {
-        if (i > 0 && i % 20 == 0) {
-            std::cout << std::endl;
-        }
-        std::cout << out->data()[i] << " ";
-    }
-    std::cout << std::endl;
 }
 
 }

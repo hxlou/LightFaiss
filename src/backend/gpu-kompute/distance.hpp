@@ -23,6 +23,8 @@ void query(
     float* distances,
     uint64_t* results,
     MetricType metricType,
+    bool transX = false,
+    bool transY = false,
     float* metricArg = nullptr
 );
 
@@ -39,7 +41,9 @@ void calL2(
     uint64_t k,
     float* outDistances,
     uint64_t* outIndices,
-    const float* yNorm = nullptr
+    const float* yNorm = nullptr,
+    bool transX = false,
+    bool transY = false
 );
 
 /*
@@ -56,7 +60,9 @@ void calIP(
     size_t k,
     float* outDistances,
     uint64_t* outIndices,
-    const float* yNorm = nullptr
+    const float* yNorm = nullptr,
+    bool transX = false,
+    bool transY = false
 );
 
 void matmul (

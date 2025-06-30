@@ -43,7 +43,9 @@ class FlatIndex
             uint64_t nQuery,
             const float* query,
             uint64_t* results,
-            float* distances
+            float* distances,
+            bool transX = false,
+            bool transY = false
         );
 
         // 根据索引重建向量
