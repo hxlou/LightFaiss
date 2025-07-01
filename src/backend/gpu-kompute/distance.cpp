@@ -1,7 +1,7 @@
 #include <kompute/Kompute.hpp>
 
-#include "backend/gpu-kompute/distance.hpp"
-#include "backend/gpu-kompute/readShader.hpp"
+#include "src/backend/gpu-kompute/distance.hpp"
+#include "src/backend/gpu-kompute/readShader.hpp"
 
 #include <vector>
 

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "backend/gpu-kompute/readShader.hpp"
+#include "src/backend/gpu-kompute/readShader.hpp"
 
 #include <vector>
 #include <string>
