@@ -4,6 +4,9 @@
 
 #include "MetricType.hpp"
 #include "Device.hpp"
+#include <android/asset_manager.h>
+#include <android/asset_manager_jni.h>
+#include <mutex>
 
 #include <vector>
 
@@ -53,6 +56,8 @@ class FlatIndex
             uint64_t idx,
             float* vec
         );
+        static AAssetManager* assetManager_;       // 资源管理器，用于读取SPV文件
+        static std::mutex assetManagerMutex_;      // 互斥锁，用于保护资源管理器的访问
 
     private:
         kp::Manager* mgr_;             // Kompute管理器

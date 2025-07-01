@@ -2,6 +2,10 @@
 
 #include "backend/gpu-kompute/distance.hpp"
 #include "backend/gpu-kompute/readShader.hpp"
+#include "index/FlatIndex.hpp"
+
+#include <android/asset_manager.h>
+#include <android/asset_manager_jni.h>
 
 #include <vector>
 
@@ -149,7 +153,11 @@ void matmul (
     bool transX,
     bool transY
 ) {
-    auto shader = readSpvFile("src/backend/gpu-kompute/shaders/matmul.comp.spv");
+    std::vector<uint32_t> shader;
+    {
+        std::lock_guard<std::mutex> lock(FlatIndex::assetManagerMutex_);
+        shader = readSpvAsset(FlatIndex::assetManager_, "shaders/matmul.comp.spv");
+    }
 
     std::vector<uint32_t> pushConsts = {
         static_cast<uint32_t>(m),
@@ -177,7 +185,7 @@ void matmul (
         ->record<kp::OpSyncDevice>(memories)
         ->record<kp::OpAlgoDispatch>(algorithm)
         ->record<kp::OpSyncLocal>({out});
-    
+
     seq->eval();
 }
 

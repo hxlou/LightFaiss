@@ -9,6 +9,9 @@
 #include <cstdint> // For uint32_t, uint64_t, etc.
 #include <cstddef> // For size_t
 
+#include <android/asset_manager.h>
+#include <android/asset_manager_jni.h>
+
 namespace gpu_kompute {
 
 void query(

@@ -3,9 +3,11 @@
 #include "backend/gpu-kompute/distance.hpp"
 
 
+AAssetManager* FlatIndex::assetManager_ = nullptr;
+std::mutex FlatIndex::assetManagerMutex_;
 
 FlatIndex::FlatIndex(uint64_t dim, uint64_t capacity, bool isFloat16, MetricType metricType, kp::Manager* mgr)
-    : dim_(dim), num_(0), capacity_(capacity), isFloat16_(isFloat16), metricType_(metricType), mgr_(mgr) {
+        : dim_(dim), num_(0), capacity_(capacity), isFloat16_(isFloat16), metricType_(metricType), mgr_(mgr) {
     data_.resize(capacity * dim);
     dataNorm_.resize(capacity * dim); // 初始化Norm数据
 }
