@@ -2,12 +2,15 @@
 
 #pragma once
 
-#include "src/index/MetricType.hpp"
+#include "index/MetricType.hpp"
 
 #include <kompute/Kompute.hpp> // Assuming this is the correct path for the Kompute library
 
 #include <cstdint> // For uint32_t, uint64_t, etc.
 #include <cstddef> // For size_t
+
+#include <android/asset_manager.h>
+#include <android/asset_manager_jni.h>
 
 namespace gpu_kompute {
 

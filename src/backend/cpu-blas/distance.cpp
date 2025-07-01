@@ -1,4 +1,4 @@
-#include "src/backend/cpu-blas/distance.hpp"
+#include "backend/cpu-blas/distance.hpp"
 
 #include <memory>          // std::unique_ptr
 #include <cstddef>         // size_t

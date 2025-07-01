@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "src/index/MetricType.hpp"
+#include "index/MetricType.hpp"
 
 #include <cstdint> // For uint, uint64_t, etc.
 #include <cstddef> // For size_t
