@@ -1,4 +1,4 @@
-#include "index/FlatIndex.hpp"
+#include "src/index/FlatIndex.hpp"
 
 #include <vector>
 #include <iostream>
@@ -52,7 +52,7 @@ void testFlatIndexCpuL2() {
     }
 }
 
-void testFlatIndexGpuIP() {
+void testFlatIndexCpuIP() {
     FlatIndex index(2, 1000, true, MetricType::METRIC_INNER_PRODUCT, nullptr);
 
     // 添加1000个向量，把圆周平分1000份，每个向量长度为1
@@ -102,7 +102,7 @@ void testFlatIndexGpuIP() {
 int main () {
 
     testFlatIndexCpuL2();
-    testFlatIndexGpuIP();
+    testFlatIndexCpuIP();
 
     return 0;
 }

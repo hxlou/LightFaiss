@@ -1,5 +1,5 @@
-#include "backend/gpu-kompute/distance.hpp"
-#include "index/FlatIndex.hpp"
+#include "src/backend/gpu-kompute/distance.hpp"
+#include "src/index/FlatIndex.hpp"
 
 #include <vector>
 #include <iostream>
@@ -29,7 +29,7 @@ void testFlatIndexGpuIP(kp::Manager* mgr) {
     std::vector<float> distances(k * nQuery);
     
     index.query(k, 0, nData, DeviceType::GPU_KOMPUTE, nQuery, 
-                queries.data(), results.data(), distances.data(), false, true);
+                queries.data(), results.data(), distances.data());
 
     // 每个查询结果输出一次
     for (size_t i = 0; i < nQuery; i += 2) {

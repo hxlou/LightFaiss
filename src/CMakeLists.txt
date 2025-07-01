@@ -1,3 +1,6 @@
 add_subdirectory(backend)
 add_subdirectory(index)
 add_subdirectory(test)
+if(BUILD_PYTHON_BINDINGS AND pybind11_FOUND)
+    add_subdirectory(python)
+endif()
