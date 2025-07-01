@@ -2,8 +2,8 @@
 
 #include <kompute/Kompute.hpp>
 
-#include "MetricType.hpp"
-#include "Device.hpp"
+#include "src/index/MetricType.hpp"
+#include "src/index/Device.hpp"
 
 #include <vector>
 
@@ -11,6 +11,7 @@ class FlatIndex
 {
     public:
         FlatIndex(uint64_t dim, uint64_t capacity, bool isFloat16 = false, MetricType metricType = MetricType::METRIC_INNER_PRODUCT, kp::Manager* mgr = nullptr);
+        FlatIndex(uint64_t dim, kp::Manager* mgr = nullptr);
         ~FlatIndex() {};
 
         // 添加向量
@@ -43,9 +44,7 @@ class FlatIndex
             uint64_t nQuery,
             const float* query,
             uint64_t* results,
-            float* distances,
-            bool transX = false,
-            bool transY = false
+            float* distances
         );
 
         // 根据索引重建向量
@@ -53,6 +52,11 @@ class FlatIndex
             uint64_t idx,
             float* vec
         );
+
+        // search方法
+
+        int save(const std::string filename);
+        int load(const std::string filename);
 
     private:
         kp::Manager* mgr_;             // Kompute管理器
