@@ -46,32 +46,32 @@ bool PyFlatIndex::is_float16() const {
     return index_->isFloat16(); 
 }
 
-py::tuple PyFlatIndex::query(py::array_t<float> queries, uint64_t k, DeviceType device) {
-    py::buffer_info buf = queries.request();
+// py::tuple PyFlatIndex::query(py::array_t<float> queries, uint64_t k, DeviceType device) {
+//     py::buffer_info buf = queries.request();
     
-    uint64_t n = buf.shape[0];
-    uint64_t dim = buf.shape[1];
+//     uint64_t n = buf.shape[0];
+//     uint64_t dim = buf.shape[1];
     
-    if (dim != index_->getDim()) {
-        throw std::runtime_error("Query dimension mismatch: expected " + 
-                                std::to_string(index_->getDim()) + ", got " + std::to_string(dim));
-    }
+//     if (dim != index_->getDim()) {
+//         throw std::runtime_error("Query dimension mismatch: expected " + 
+//                                 std::to_string(index_->getDim()) + ", got " + std::to_string(dim));
+//     }
     
-    // 创建输出数组
-    auto results = NumpyHelper::create_2d_uint64_array(n, k);
-    auto distances = NumpyHelper::create_2d_float_array(n, k);
+//     // 创建输出数组
+//     auto results = NumpyHelper::create_2d_uint64_array(n, k);
+//     auto distances = NumpyHelper::create_2d_float_array(n, k);
     
-    py::buffer_info results_buf = results.request();
-    py::buffer_info distances_buf = distances.request();
+//     py::buffer_info results_buf = results.request();
+//     py::buffer_info distances_buf = distances.request();
     
-    float* query_data = static_cast<float*>(buf.ptr);
-    uint64_t* results_data = static_cast<uint64_t*>(results_buf.ptr);
-    float* distances_data = static_cast<float*>(distances_buf.ptr);
+//     float* query_data = static_cast<float*>(buf.ptr);
+//     uint64_t* results_data = static_cast<uint64_t*>(results_buf.ptr);
+//     float* distances_data = static_cast<float*>(distances_buf.ptr);
     
-    index_->query(n, k, device, query_data, results_data, distances_data);
+//     index_->query(n, k, device, query_data, results_data, distances_data);
     
-    return py::make_tuple(results, distances);
-}
+//     return py::make_tuple(results, distances);
+// }
 
 py::tuple PyFlatIndex::query_range(py::array_t<float> queries, uint64_t k, uint64_t start, uint64_t end, 
                                   DeviceType device) {

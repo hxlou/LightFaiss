@@ -13,6 +13,8 @@ option(USE_GPU_KOMP "Enable GPU Kompute backend" ON)
 option(USE_NPU_HEXAGON "Enable NPU Hexagon backend" OFF)
 option(BUILD_PYTHON_BINDINGS "Build Python bindings" ON)
 
+set(BUILD_SHARED_LIBS ON)
+
 # Kompute路径（你可以将 external 目录放在 myDB 根目录下）
 set(KOMPUTE_PATH "${CMAKE_SOURCE_DIR}/external/kompute")
 if (NOT EXISTS ${KOMPUTE_PATH})

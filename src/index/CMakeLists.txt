@@ -1,4 +1,4 @@
-add_library(index
+add_library(index STATIC
   Device.hpp
   FlatIndex.cpp
   FlatIndex.hpp

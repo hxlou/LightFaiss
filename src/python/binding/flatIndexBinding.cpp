@@ -9,19 +9,44 @@ void bind_flat_index(py::module& m) {
         This index stores vectors in a flat structure and performs brute-force
         search for exact results. It supports both CPU and GPU computation.
     )pbdoc")
-        .def(py::init<uint64_t, uint64_t, bool, MetricType>(),
-             R"pbdoc(
-                 Create a FlatIndex with specified parameters.
-                 
-                 Args:
-                     dim: Vector dimension
-                     capacity: Maximum number of vectors to store
-                     isFloat16: Whether to use float16 storage (default: False)
-                     metricType: Distance metric type (default: METRIC_INNER_PRODUCT)
-             )pbdoc",
-             py::arg("dim"), py::arg("capacity"), 
-             py::arg("isFloat16") = false, 
-             py::arg("metricType") = MetricType::METRIC_INNER_PRODUCT)
+        // 使用 lambda 表达式来定义构造函数
+        .def(py::init([](uint64_t dim, 
+                        uint64_t capacity, 
+                        bool isFloat16, 
+                        MetricType metricType,
+                        py::object mgr_py_obj) { // 1. 接收 Python kp.Manager 对象作为 py::object
+            
+            // 2. 检查传入的是否是 None
+            if (mgr_py_obj.is_none()) {
+                throw std::invalid_argument("Kompute Manager cannot be None.");
+            }
+
+            // 3. 将 py::object 转换为 C++ kp::Manager 的引用
+            kp::Manager& mgr_ref = mgr_py_obj.cast<kp::Manager&>();
+
+            // 4. 获取引用的地址，得到 C++ 指针
+            kp::Manager* mgr_ptr = &mgr_ref;
+
+            // 5. 调用 C++ 构造函数，并返回新创建的对象
+            return std::make_unique<PyFlatIndex>(dim, capacity, isFloat16, metricType, mgr_ptr);
+
+        }), R"pbdoc(
+            Create a FlatIndex with specified parameters and a Kompute Manager.
+            
+            Args:
+                dim (int): Vector dimension.
+                capacity (int): Maximum number of vectors to store.
+                isFloat16 (bool): Whether to use float16 storage.
+                metricType (MetricType): Distance metric type.
+                mgr (kp.Manager): The Kompute Manager instance for GPU operations.
+        )pbdoc",
+        // 定义 Python 端参数的名称、默认值和顺序
+        py::arg("dim"), 
+        py::arg("capacity"), 
+        py::arg("isFloat16"), 
+        py::arg("metricType"),
+        py::arg("mgr") // 新增的 mgr 参数
+        )
         
         .def(py::init<uint64_t>(),
              R"pbdoc(
@@ -53,19 +78,19 @@ void bind_flat_index(py::module& m) {
         .def("is_float16", &PyFlatIndex::is_float16,
              "Check if using float16 storage")
         
-        .def("query", &PyFlatIndex::query,
-             R"pbdoc(
-                 Query the index for nearest neighbors.
+        // .def("query", &PyFlatIndex::query,
+        //      R"pbdoc(
+        //          Query the index for nearest neighbors.
                  
-                 Args:
-                     queries: 2D numpy array of query vectors (n_queries, dim)
-                     k: Number of nearest neighbors to return
-                     device: Device type (CPU or GPU)
+        //          Args:
+        //              queries: 2D numpy array of query vectors (n_queries, dim)
+        //              k: Number of nearest neighbors to return
+        //              device: Device type (CPU or GPU)
                  
-                 Returns:
-                     Tuple of (indices, distances) as numpy arrays
-             )pbdoc",
-             py::arg("queries"), py::arg("k"), py::arg("device"))
+        //          Returns:
+        //              Tuple of (indices, distances) as numpy arrays
+        //      )pbdoc",
+        //      py::arg("queries"), py::arg("k"), py::arg("device"))
         
         .def("query_range", &PyFlatIndex::query_range,
              R"pbdoc(

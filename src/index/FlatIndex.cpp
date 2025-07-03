@@ -2,8 +2,9 @@
 #include "src/backend/cpu-blas/distance.hpp"
 #include "src/backend/gpu-kompute/distance.hpp"
 
+#include <filesystem>
 #include <fstream>
-
+#include <iostream>
 FlatIndex::FlatIndex(uint64_t dim, uint64_t capacity, bool isFloat16, MetricType metricType, kp::Manager* mgr)
     : dim_(dim), num_(0), capacity_(capacity), isFloat16_(isFloat16), metricType_(metricType), mgr_(mgr) {
     data_.resize(capacity * dim);
@@ -112,17 +113,38 @@ void FlatIndex::reconstruct(
 }
 
 int FlatIndex::save(const std::string filename) {
-    // 修改filename为 data/filename
-    if (filename.find("data/") != std::string::npos) {
-        std::string newFilename = "data/" + filename;
-    }
+    try {
+        // 1. 将字符串转换为 filesystem::path 对象
+        std::filesystem::path file_path(filename);
 
+        // 2. 获取文件所在的目录 ("data/")
+        std::filesystem::path dir_path = file_path.parent_path();
+
+        // 3. 如果存在父目录，则检查并创建它
+        //    (这可以避免对 "file1.bin" 这样的无目录路径执行操作)
+        if (!dir_path.empty()) {
+            // 4. 检查目录是否存在，如果不存在，则创建
+            //    create_directories 类似于 `mkdir -p`，会创建所有必需的父目录
+            //    如果目录已存在，它什么也不做。
+            std::filesystem::create_directories(dir_path);
+        }
+
+    } catch (const std::filesystem::filesystem_error& e) {
+        // 如果创建目录时发生 I/O 错误，捕获异常
+        std::cerr << "Filesystem error while creating directory: " << e.what() << std::endl;
+        return -1;
+    }
+    
     std::ofstream ofs(filename, std::ios::binary);
     if (!ofs) {
         return -1; // 打开文件失败
     }
+
     // header
-    uint64_t magicNumber = 1145; // 魔数标识
+    /*
+        magicNumber + dim + num + isFloat16 + metricType
+    */
+    uint64_t magicNumber = 1145; 
     ofs.write(reinterpret_cast<const char*>(&magicNumber), sizeof(uint64_t));
     ofs.write(reinterpret_cast<const char*>(&dim_), sizeof(uint64_t));
     ofs.write(reinterpret_cast<const char*>(&num_), sizeof(uint64_t));
