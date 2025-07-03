@@ -101,7 +101,7 @@ py::tuple PyFlatIndex::query_range(py::array_t<float> queries, uint64_t k, uint6
     
     index_->query(k, start, end, device, nQuery, query_data, 
                  results_data, distances_data);
-    
+
     return py::make_tuple(results, distances);
 }
 

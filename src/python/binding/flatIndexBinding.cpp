@@ -18,7 +18,7 @@ void bind_flat_index(py::module& m) {
             
             // 2. 检查传入的是否是 None
             if (mgr_py_obj.is_none()) {
-                throw std::invalid_argument("Kompute Manager cannot be None.");
+                return std::make_unique<PyFlatIndex>(dim, capacity, isFloat16, metricType, nullptr);
             }
 
             // 3. 将 py::object 转换为 C++ kp::Manager 的引用
