@@ -11,13 +11,13 @@ FlatIndex::FlatIndex(uint64_t dim, uint64_t capacity, bool isFloat16, MetricType
     dataNorm_.resize(capacity * dim); // 初始化Norm数据
 }
 
-FlatIndex::FlatIndex(uint64_t dim, kp::Manager* mgr) {
+FlatIndex::FlatIndex(uint64_t dim, kp::Manager* mgr, MetricType metricType) {
     // 创建一个空的FlatIndex
     dim_ = dim;
     num_ = 0;
     capacity_ = 0;              // 默认容量
     isFloat16_ = false;         // 默认不使用 float16 存储
-    metricType_ = MetricType::METRIC_INNER_PRODUCT; // 默认使用内积度量
+    metricType_ = metricType; // 默认使用内积度量
     mgr_ = mgr;                 // 默认不使用Kompute管理器
     data_.clear();              // 清空数据
     dataNorm_.clear();          // 清空Norm数据

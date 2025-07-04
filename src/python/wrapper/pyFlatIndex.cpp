@@ -7,7 +7,7 @@
 PyFlatIndex::PyFlatIndex(uint64_t dim, uint64_t capacity, bool isFloat16, MetricType metricType, kp::Manager* mgr) 
     : index_(std::make_unique<FlatIndex>(dim, capacity, isFloat16, metricType, mgr)) {}
 
-PyFlatIndex::PyFlatIndex(uint64_t dim) 
+PyFlatIndex::PyFlatIndex(uint64_t dim, kp::Manager* mgr, MetricType metricType) 
     : index_(std::make_unique<FlatIndex>(dim)) {}
 
 void PyFlatIndex::add_vectors(py::array_t<float> vectors) {

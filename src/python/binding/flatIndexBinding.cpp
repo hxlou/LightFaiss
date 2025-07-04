@@ -48,14 +48,28 @@ void bind_flat_index(py::module& m) {
         py::arg("mgr") // 新增的 mgr 参数
         )
         
-        .def(py::init<uint64_t>(),
+        .def(py::init([](uint64_t dim, py::object mgr_py_obj, MetricType metricType) {
+            // 检查传入参数是否为None
+            kp::Manager* mgr_ptr = nullptr;
+            if (!mgr_py_obj.is_none()) {
+                // 将 py::object 转换为 C++ kp::Manager 的引用
+                kp::Manager& mgr_ref = mgr_py_obj.cast<kp::Manager&>();
+                // 获取引用的地址，得到 C++ 指针    
+                mgr_ptr = &mgr_ref;
+            }
+
+            return std::make_unique<pyFlatIndex>(dim, mgr_ptr, metricType);
+        }),
              R"pbdoc(
                  Create a FlatIndex with dimension only.
                  
                  Args:
                      dim: Vector dimension
              )pbdoc",
-             py::arg("dim"))
+             py::arg("dim"),
+             py::arg("mgr"),
+             py::arg("metricType")
+            )
         
         .def("add_vectors", &PyFlatIndex::add_vectors,
              R"pbdoc(

@@ -14,7 +14,7 @@ public:
     // 构造函数
     PyFlatIndex(uint64_t dim, uint64_t capacity, bool isFloat16 = false, 
                 MetricType metricType = MetricType::METRIC_INNER_PRODUCT, kp::Manager* mgr = nullptr);
-    PyFlatIndex(uint64_t dim);
+    PyFlatIndex(uint64_t dim, kp::Manager* mgr, MetricType metricType);
     
     // 向量操作
     void add_vectors(py::array_t<float> vectors);

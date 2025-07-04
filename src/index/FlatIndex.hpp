@@ -11,7 +11,7 @@ class FlatIndex
 {
     public:
         FlatIndex(uint64_t dim, uint64_t capacity, bool isFloat16 = false, MetricType metricType = MetricType::METRIC_INNER_PRODUCT, kp::Manager* mgr = nullptr);
-        FlatIndex(uint64_t dim, kp::Manager* mgr = nullptr);
+        FlatIndex(uint64_t dim, kp::Manager* mgr = nullptr, MetricType metricType = MetricType::METRIC_INNER_PRODUCT);
         ~FlatIndex() {};
 
         // 添加向量
