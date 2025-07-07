@@ -1,5 +1,5 @@
-#include "src/backend/cpu-blas/L2Norm.hpp"
-#include "src/backend/cpu-blas/distance.hpp"
+#include "backend/cpu-blas/L2Norm.hpp"
+#include "backend/cpu-blas/distance.hpp"
 
 #include <cmath>
 

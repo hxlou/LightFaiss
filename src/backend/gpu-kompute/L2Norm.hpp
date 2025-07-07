@@ -1,6 +1,6 @@
 #pragma once
 
-#include "src/index/MetricType.hpp"
+#include "index/MetricType.hpp"
 
 #include <kompute/Kompute.hpp> // Assuming this is the correct path for the Kompute library
 

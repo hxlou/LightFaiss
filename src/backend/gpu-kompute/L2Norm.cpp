@@ -1,6 +1,6 @@
-#include "src/backend/gpu-kompute/L2Norm.hpp"
-#include "src/backend/gpu-kompute/distance.hpp"
-#include "src/backend/gpu-kompute/readShader.hpp"
+#include "backend/gpu-kompute/L2Norm.hpp"
+#include "backend/gpu-kompute/distance.hpp"
+#include "backend/gpu-kompute/readShader.hpp"
 
 #include <kompute/Kompute.hpp>
 
