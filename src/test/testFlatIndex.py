@@ -99,9 +99,69 @@ def test_flat_index_gpu():
             print(f"  Index: {idx}, Original Vector: {original_vector}, Distance: {distance}")
         print("----------------------")
 
+def test_L2_renorm_gpu():
+    print("Testing GPU L2 renormalization...")
+
+    mgr = kp.Manager()
+
+    # 创建一个 dim = 2 的向量
+    dim = 2
+    nData = 1000
+    vecs = np.array([[np.cos(2 * np.pi * i / nData) * 10.0,
+                      np.sin(2 * np.pi * i / nData) * 10.0] for i in range(nData)], dtype=np.float32).flatten()
+                      
+    # 调用L2 renormalization
+    lf.normalized_L2_gpu(mgr, vecs, dim, nData)
+
+    # 验证结果
+    isPassed = True
+    for i in range(nData):
+        x = vecs[i * 2 + 0]
+        y = vecs[i * 2 + 1]
+        gx = np.cos(2 * np.pi * i / nData)
+        gy = np.sin(2 * np.pi * i / nData)
+        if not (np.isclose(x, gx) and np.isclose(y, gy)):
+            print(f"Renormalization failed at index {i}: expected ({gx}, {gy}), got ({x}, {y})")
+            isPassed = False
+
+    if isPassed:
+        print("GPU L2 renormalization passed.")
+    else:
+        raise ValueError("GPU L2 renormalization failed.")
+
+def test_L2_renorm_cpu():
+    print("Testing CPU L2 renormalization on CPU...")
+
+    # 创建一个 dim = 2 的向量
+    dim = 2
+    nData = 1000
+    vecs = np.array([[np.cos(2 * np.pi * i / nData) * 10.0,
+                      np.sin(2 * np.pi * i / nData) * 10.0] for i in range(nData)], dtype=np.float32).flatten()
+                      
+    # 调用L2 renormalization
+    lf.normalized_L2_cpu(vecs, dim, nData)
+
+    # 验证结果
+    isPassed = True
+    for i in range(nData):
+        x = vecs[i * 2 + 0]
+        y = vecs[i * 2 + 1]
+        gx = np.cos(2 * np.pi * i / nData)
+        gy = np.sin(2 * np.pi * i / nData)
+        if not (np.isclose(x, gx) and np.isclose(y, gy)):
+            print(f"Renormalization failed at index {i}: expected ({gx}, {gy}), got ({x}, {y})")
+            isPassed = False
+
+    if isPassed:
+        print("CPU L2 renormalization on CPU passed.")
+    else:
+        raise ValueError("CPU L2 renormalization on CPU failed.")
+
 if __name__ == "__main__":
     test_flat_index_cpu()
     test_flat_index_gpu()
     test_flat_index_common()
-    print("Flat index test passed.")
+    test_L2_renorm_cpu()
+    test_L2_renorm_gpu()
+    print("[*FINAL*]: Flat index test passed.")
     sys.exit(0)

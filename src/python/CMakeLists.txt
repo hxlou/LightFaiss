@@ -13,6 +13,7 @@ set(PYTHON_BINDING_SOURCES
     # FlatIndex相关
     wrapper/pyFlatIndex.cpp
     binding/flatIndexBinding.cpp
+    binding/L2RenormBinding.cpp
 )
 
 # 指定输出目录为当前源目录

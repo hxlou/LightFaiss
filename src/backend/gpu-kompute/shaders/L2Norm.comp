@@ -1,0 +1,27 @@
+#version 450
+layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+
+// 只需传n和dim
+layout(push_constant) uniform PushConsts {
+    uint n;   // 行数：向量个数
+    uint dim; // 每个向量的长度
+} pc;
+
+// 输入vecs: n * dim
+layout(set = 0, binding = 0) buffer Vecs { float vecs[]; };
+
+// 输出norms: n * 1
+layout(set = 0, binding = 1) buffer Norms { float norms[]; };
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x; // 当前处理第idx个向量（行）
+    if (idx >= pc.n) return;
+
+    float sum = 0.0;
+    uint base = idx * pc.dim;
+    for (uint j = 0u; j < pc.dim; ++j) {
+        float v = vecs[base + j];
+        sum += v * v;
+    }
+    norms[idx] = sum;
+}

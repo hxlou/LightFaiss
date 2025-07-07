@@ -58,7 +58,7 @@ void bind_flat_index(py::module& m) {
                 mgr_ptr = &mgr_ref;
             }
 
-            return std::make_unique<pyFlatIndex>(dim, mgr_ptr, metricType);
+            return std::make_unique<PyFlatIndex>(dim, mgr_ptr, metricType);
         }),
              R"pbdoc(
                  Create a FlatIndex with dimension only.

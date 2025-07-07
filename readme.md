@@ -16,13 +16,3 @@ make -j8
 ### python支持
 
 在编译后可以在目录`./build/src/python`下发现python模块`lightfaiss`，包含两个子模块`lightfaiss_py`和`kp`，如果希望直接使用kompute接口，通过`import lightfaiss.kp as kp`来使用，否则有关kp的变量在python与Cpp代码之间转换会失败
-
-### 下一步工作
-
-lightRAG
-   |    <----- lightFaissDBStorage （lightRAG的数据库
-   |    <----- search接口待实现（具体的调度算法
-lightFaiss
-   |    <----- NPU接口待实现
-   |    <----- GPU的L2Norm接口待实现
-backend

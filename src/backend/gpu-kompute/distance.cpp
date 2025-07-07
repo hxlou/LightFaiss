@@ -196,9 +196,35 @@ void vecsNorm (
     size_t n,
     size_t dim
 ) {
-    // vecs: n * dim
+    // vecs  : n * dim
+    // norms : n * 1
     // norms[i] = vecs[i*dim + 0] ^ 2 + ... + vecs[i * dim + (dim - 1)] ^ 2
+    auto shader = readSpvFile("src/backend/gpu-kompute/shaders/L2Norm.comp.spv");
 
+    std::vector<uint32_t> pushConsts = {
+        static_cast<uint32_t>(n),
+        static_cast<uint32_t>(dim)
+    };
+
+    std::vector<std::shared_ptr<kp::Memory>> memories = {
+        std::static_pointer_cast<kp::Memory>(vecs),
+        std::static_pointer_cast<kp::Memory>(norms)
+    };
+
+    auto algorithm = mgr->algorithm(
+        memories,
+        shader,
+        kp::Workgroup({static_cast<uint32_t>(n), 1, 1}),
+        std::vector<float>{},
+        pushConsts
+    );
+
+    auto seq = mgr->sequence()
+        ->record<kp::OpSyncDevice>(memories)
+        ->record<kp::OpAlgoDispatch>(algorithm)
+        ->record<kp::OpSyncLocal>({norms});
+
+    seq->eval();
 }
 
 void calL2Add (
@@ -213,6 +239,34 @@ void calL2Add (
     // L2 = xNorm + yNorm - 2 * IP
     // L2[i][j] = xNorm[i] + yNorm[j] - 2 * IP[i][j]
 
+    auto shader = readSpvFile("src/backend/gpu-kompute/shaders/L2NormAdd.comp.spv");
+
+    std::vector<uint32_t> pushConsts = {
+        static_cast<uint32_t>(nx),
+        static_cast<uint32_t>(ny)
+    };
+
+    std::vector<std::shared_ptr<kp::Memory>> memories = {
+        std::static_pointer_cast<kp::Memory>(xNorm),
+        std::static_pointer_cast<kp::Memory>(yNorm),
+        std::static_pointer_cast<kp::Memory>(IP),
+        std::static_pointer_cast<kp::Memory>(L2)
+    };
+
+    auto algorithm = mgr->algorithm(
+        memories,
+        shader,
+        kp::Workgroup({static_cast<uint32_t>(nx), static_cast<uint32_t>(ny), 1}),
+        std::vector<float>{},
+        pushConsts
+    );
+
+    auto seq = mgr->sequence()
+        ->record<kp::OpSyncDevice>(memories)
+        ->record<kp::OpAlgoDispatch>(algorithm)
+        ->record<kp::OpSyncLocal>({L2});
+
+    seq->eval();
 }
 
 }

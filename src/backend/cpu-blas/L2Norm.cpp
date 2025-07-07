@@ -26,7 +26,7 @@ void fvec_renorm_L2(
         fvec_renorm_L2_noomp(dim, nx, x);
 }
 
-    void fvec_renorm_L2_noomp (
+void fvec_renorm_L2_noomp (
     size_t dim,
     size_t nx,
     float* x

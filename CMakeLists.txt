@@ -132,19 +132,23 @@ set(LIGHTFAISS_HEADERS
 # CPU BLAS 后端文件
 set(CPU_BLAS_SOURCES
     src/backend/cpu-blas/distance.cpp
+    src/backend/cpu-blas/L2Norm.cpp
 )
 set(CPU_BLAS_HEADERS
     src/backend/cpu-blas/distance.hpp
+    src/backend/cpu-blas/L2Norm.hpp
 )
 
 # GPU Kompute 后端文件
 set(GPU_KOMPUTE_SOURCES
     src/backend/gpu-kompute/distance.cpp
     src/backend/gpu-kompute/readShader.cpp
+    src/backend/gpu-kompute/L2Norm.cpp
 )
 set(GPU_KOMPUTE_HEADERS
     src/backend/gpu-kompute/distance.hpp
     src/backend/gpu-kompute/readShader.hpp
+    src/backend/gpu-kompute/L2Norm.hpp
 )
 
 # 根据选项添加后端文件

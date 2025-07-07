@@ -1,4 +1,5 @@
 #include "src/index/FlatIndex.hpp"
+#include "src/backend/cpu-blas/L2Norm.hpp"
 
 #include <vector>
 #include <iostream>
@@ -99,10 +100,48 @@ void testFlatIndexCpuIP() {
     }
 }
 
+void FlatIndexCpuRenorm() {
+    // 不用查询，单单测试一下remorm函数是否正常工作
+    // 新建向量 1000 个，把半径为10的圆周分成1000份
+    int nData = 1000;
+    std::vector<float> vecs(2 * nData);
+    for (int i = 0; i < nData; ++i) {
+        vecs[i * 2] = cos(2 * M_PI * i / nData) * 10.0f;
+        vecs[i * 2 + 1] = sin(2 * M_PI * i / nData) * 10.0f;
+    }
+
+    cpu_blas::normalized_L2(2, nData, vecs.data());
+
+    bool isPassed = true;
+    // 检测归一化后的向量是否正确
+    for (int i = 0; i < nData; ++i) {
+        // 理论上现在的vecs应该是把半径为1的圆周分成1000份
+        float x = vecs[i * 2];
+        float y = vecs[i * 2 + 1];
+        float gx = cos(2 * M_PI * i / nData);
+        float gy = sin(2 * M_PI * i / nData);
+        if (std::abs(x - gx) > 1e-5 || std::abs(y - gy) > 1e-5) {
+            std::cout << "Renormalization failed at index " << i 
+                      << ": expected (" << gx << ", " << gy << "), got (" 
+                      << x << ", " << y << ")" << std::endl;
+            isPassed = false;
+        }
+    }
+
+    if (isPassed) {
+        std::cout << "Renormalization test passed!" << std::endl;
+    } else {
+        std::cout << "Renormalization test failed!" << std::endl;
+    }
+}
+
 int main () {
 
     testFlatIndexCpuL2();
+    std::cout << "-------------------------" << std::endl;
     testFlatIndexCpuIP();
+    std::cout << "-------------------------" << std::endl;
+    FlatIndexCpuRenorm();
 
     return 0;
 }

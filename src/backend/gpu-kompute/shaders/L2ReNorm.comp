@@ -1,0 +1,26 @@
+#version 450
+layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+
+layout(push_constant) uniform PushConsts {
+    uint nx;
+    uint dim;
+} pc;
+
+// 输入输出同一个 buffer
+layout(set = 0, binding = 0) buffer X { float x[]; };
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x; // 当前向量编号
+    if (idx >= pc.nx) return;
+
+    uint base = idx * pc.dim;
+    float norm = 0.0;
+    for (uint j = 0u; j < pc.dim; ++j) {
+        float v = x[base + j];
+        norm += v * v;
+    }
+    norm = sqrt(norm) + 1e-12; // 防止除零
+    for (uint j = 0u; j < pc.dim; ++j) {
+        x[base + j] = x[base + j] / norm;
+    }
+}
