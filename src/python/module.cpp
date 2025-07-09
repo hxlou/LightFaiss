@@ -6,10 +6,9 @@
 
 namespace py = pybind11;
 
-PYBIND11_MODULE(lightfaiss_py, m) {
-    m.doc() = "LightFaiss Python bindings - A lightweight vector search library";
+PYBIND11_MODULE(edgevecdb_core, m) {
+    m.doc() = "EdgeVecDB Python bindings - A lightweight vector search library for edge devices";
     
-    py::module_::import("kp");
     // 绑定通用枚举和类型
     bind_common_enums(m);
     
