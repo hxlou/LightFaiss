@@ -1,0 +1,478 @@
+cmake_minimum_required(VERSION 3.16)
+
+# 读取版本信息
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/VERSION.txt" PROJECT_VERSION)
+string(STRIP "${PROJECT_VERSION}" PROJECT_VERSION)
+
+project(EdgeVecDB 
+    VERSION ${PROJECT_VERSION}
+    LANGUAGES CXX
+    DESCRIPTION "A lightweight vector search library for edge devices"
+)
+
+if(ANDROID)
+    # 这是最关键的一行，它会移除所有现有的 -D_FORTIFY_SOURCE=...
+    # 然后添加我们自己的定义。
+    string(REPLACE "-D_FORTIFY_SOURCE=2" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+    string(REPLACE "-D_FORTIFY_SOURCE=1" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+    add_compile_options(-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0)
+
+    # 同时，不要手动定义 __ANDROID_API__，让 toolchain 自己处理
+    # string(REPLACE "-D__ANDROID_API__=24" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+endif()
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# 调试信息
+message(STATUS "CMAKE_SOURCE_DIR: ${CMAKE_SOURCE_DIR}")
+message(STATUS "CMAKE_CURRENT_SOURCE_DIR: ${CMAKE_CURRENT_SOURCE_DIR}")
+message(STATUS "CMAKE_BINARY_DIR: ${CMAKE_BINARY_DIR}")
+
+# 全局开启位置无关代码（PIC）
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
+# 选项：启用/禁用不同后端
+option(USE_CPU_BLAS "Enable CPU BLAS backend" ON)
+option(USE_GPU_KOMP "Enable GPU Kompute backend" ON)
+option(USE_NPU_HEXAGON "Enable NPU Hexagon backend" OFF)
+option(BUILD_PYTHON_BINDINGS "Build Python bindings" ON)
+option(BUILD_TESTS "Build test programs" OFF)
+
+# Python相关设置
+if(BUILD_PYTHON_BINDINGS)
+    # 设置 Python 搜索为交互式，避免多次搜索冲突
+    set(Python_ARTIFACTS_INTERACTIVE ON)
+    
+    # 将 pybind11 移到最前面，避免与其他包的 Python 搜索冲突
+    find_package(pybind11 CONFIG REQUIRED)
+    # 检查是否为 Android 构建
+    if(ANDROID)
+        message(STATUS "Android build detected, using manual Python configuration")
+        
+        # 调试：显示所有传入的Python相关变量
+        message(STATUS "=== Python Variables Debug ===")
+        message(STATUS "Python_EXECUTABLE: ${Python_EXECUTABLE}")
+        message(STATUS "PYTHON_EXECUTABLE: ${PYTHON_EXECUTABLE}")
+        message(STATUS "Python_INCLUDE_DIRS: ${Python_INCLUDE_DIRS}")
+        message(STATUS "PYTHON_INCLUDE_DIR: ${PYTHON_INCLUDE_DIR}")
+        message(STATUS "Python_LIBRARIES: ${Python_LIBRARIES}")
+        message(STATUS "PYTHON_LIBRARY: ${PYTHON_LIBRARY}")
+        message(STATUS "Python_NumPy_INCLUDE_DIRS: ${Python_NumPy_INCLUDE_DIRS}")
+        message(STATUS "PYTHON_NUMPY_INCLUDE_DIR: ${PYTHON_NUMPY_INCLUDE_DIR}")
+        message(STATUS "==============================")
+        
+        # 对于 Android，我们期望从 setup.py 传递所有必要的 Python 变量
+        # 检查新格式和旧格式的变量名
+        if(NOT DEFINED Python_EXECUTABLE AND NOT DEFINED PYTHON_EXECUTABLE)
+            message(FATAL_ERROR "Python_EXECUTABLE or PYTHON_EXECUTABLE must be set for Android builds")
+        endif()
+        if(NOT DEFINED Python_INCLUDE_DIRS AND NOT DEFINED PYTHON_INCLUDE_DIR)
+            message(FATAL_ERROR "Python_INCLUDE_DIRS or PYTHON_INCLUDE_DIR must be set for Android builds")
+        endif()
+        if(NOT DEFINED Python_NumPy_INCLUDE_DIRS AND NOT DEFINED PYTHON_NUMPY_INCLUDE_DIR)
+            message(FATAL_ERROR "Python_NumPy_INCLUDE_DIRS or PYTHON_NUMPY_INCLUDE_DIR must be set for Android builds")
+        endif()
+        
+        # 统一变量名 - 使用新格式
+        if(DEFINED PYTHON_EXECUTABLE AND NOT DEFINED Python_EXECUTABLE)
+            set(Python_EXECUTABLE ${PYTHON_EXECUTABLE})
+        endif()
+        if(DEFINED PYTHON_INCLUDE_DIR AND NOT DEFINED Python_INCLUDE_DIRS)
+            set(Python_INCLUDE_DIRS ${PYTHON_INCLUDE_DIR})
+        endif()
+        if(DEFINED PYTHON_LIBRARY AND NOT DEFINED Python_LIBRARIES)
+            set(Python_LIBRARIES ${PYTHON_LIBRARY})
+        endif()
+        if(DEFINED PYTHON_NUMPY_INCLUDE_DIR AND NOT DEFINED Python_NumPy_INCLUDE_DIRS)
+            set(Python_NumPy_INCLUDE_DIRS ${PYTHON_NUMPY_INCLUDE_DIR})
+        endif()
+        
+        # 为了兼容性，设置一些 pybind11 期望的变量
+        set(Python3_EXECUTABLE ${Python_EXECUTABLE})
+        set(Python3_INCLUDE_DIRS ${Python_INCLUDE_DIRS})
+        set(Python3_LIBRARIES ${Python_LIBRARIES})
+        set(Python3_FOUND TRUE)
+        set(Python3_Interpreter_FOUND TRUE)
+        set(Python3_Development_FOUND TRUE)
+        
+        message(STATUS "Final Python executable: ${Python_EXECUTABLE}")
+        message(STATUS "Final Python include dirs: ${Python_INCLUDE_DIRS}")
+        message(STATUS "Final Python NumPy include dirs: ${Python_NumPy_INCLUDE_DIRS}")
+        
+    else()
+        # 非 Android 构建，使用标准 Python 查找
+        find_package(Python COMPONENTS Interpreter Development.Module NumPy REQUIRED)
+        message(STATUS "Python executable: ${Python_EXECUTABLE}")
+        message(STATUS "Python include dirs: ${Python_INCLUDE_DIRS}")
+        message(STATUS "Python NumPy include dirs: ${Python_NumPy_INCLUDE_DIRS}")
+    endif()
+endif()
+
+set(BUILD_SHARED_LIBS ON)
+
+# Kompute路径（你可以将 external 目录放在 myDB 根目录下）
+set(KOMPUTE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/external/kompute")
+if (NOT EXISTS ${KOMPUTE_PATH})
+    message(WARNING "Kompute directory not found. Cloning from GitHub...")
+    execute_process(
+            COMMAND git clone https://github.com/zju-aces-aios/kompute.git -b android-port ${KOMPUTE_PATH}
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    )
+endif ()
+
+set(VULKAN_SDK_VERSION 1.3.296.0)
+set(VULKAN_SDK_DIR ${CMAKE_CURRENT_SOURCE_DIR}/external/vulkan)
+# For Windows and macOS, set this after installing Vulkan SDK
+# For example, set(VULKAN_INCLUDE_DIR /Users/example/VulkanSDK/1.3.296.0/macOS/include)
+set(VULKAN_INCLUDE_DIR /Users/zlaa/VulkanSDK/1.3.296.0/macOS/include)
+if(${CMAKE_HOST_SYSTEM_NAME} STREQUAL "Linux")
+    if(NOT EXISTS ${VULKAN_INCLUDE_DIR})
+        file(DOWNLOAD
+                https://sdk.lunarg.com/sdk/download/${VULKAN_SDK_VERSION}/linux/vulkansdk-linux-x86_64-${VULKAN_SDK_VERSION}.tar.xz
+                ${CMAKE_BINARY_DIR}/vulkansdk-linux-x86_64-${VULKAN_SDK_VERSION}.tar.xz
+                SHOW_PROGRESS
+        )
+
+        file(MAKE_DIRECTORY ${VULKAN_SDK_DIR})
+
+        execute_process(
+                COMMAND ${CMAKE_COMMAND} -E tar xJf ${CMAKE_BINARY_DIR}/vulkansdk-linux-x86_64-${VULKAN_SDK_VERSION}.tar.xz
+                WORKING_DIRECTORY ${VULKAN_SDK_DIR}
+        )
+    endif()
+    set(VULKAN_INCLUDE_DIR ${VULKAN_SDK_DIR}/${VULKAN_SDK_VERSION}/x86_64/include)
+endif ()
+if(NOT EXISTS ${VULKAN_INCLUDE_DIR})
+    message(FATAL_ERROR "Vulkan include directory not found: ${VULKAN_INCLUDE_DIR}. Please download and install Vulkan SDK version ${VULKAN_SDK_VERSION} from https://vulkan.lunarg.com/sdk/home")
+endif()
+option(KOMPUTE_OPT_GIT_TAG "The tag of the repo to use for the example" v0.9.0)
+option(KOMPUTE_OPT_FROM_SOURCE "Whether to build example from source or from git fetch repo" ON)
+
+set(KOMPUTE_OPT_ANDROID_BUILD ON)
+set(KOMPUTE_OPT_DISABLE_VK_DEBUG_LAYERS ON)
+
+include_directories(${KOMPUTE_PATH}/src/include)
+include_directories(${CMAKE_BINARY_DIR}/external/kompute/src/shaders/glsl)
+
+add_subdirectory(${KOMPUTE_PATH} ${CMAKE_BINARY_DIR}/external/kompute)
+
+# 查找BLAS库（OpenBLAS优先，其次系统BLAS）
+set(OPENBLAS_PATH ${CMAKE_CURRENT_SOURCE_DIR}/external/OpenBLAS)
+if (NOT EXISTS ${OPENBLAS_PATH})
+    message(WARNING "OpenBLAS directory not found. Cloning from GitHub...")
+    execute_process(
+            COMMAND git clone https://github.com/zju-aces-aios/OpenBLAS.git -b android-port ${OPENBLAS_PATH}
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    )
+endif ()
+if(${CMAKE_HOST_SYSTEM_NAME} STREQUAL "Darwin")
+    set(NDK_HOST "darwin-x86_64")
+elseif(${CMAKE_HOST_SYSTEM_NAME} STREQUAL "Linux")
+    set(NDK_HOST "linux-x86_64")
+elseif(${CMAKE_HOST_SYSTEM_NAME} STREQUAL "Windows")
+    set(NDK_HOST "windows-x86_64")
+else()
+    message(FATAL_ERROR "Unsupported host system: ${CMAKE_HOST_SYSTEM_NAME}")
+endif()
+
+set(NDK_TOOLCHAIN_PATH "${ANDROID_NDK}/toolchains/llvm/prebuilt/${NDK_HOST}/bin")
+set(OUTPUT_FILE ${CMAKE_BINARY_DIR}/OpenBLAS_build_output.log)
+set(ERROR_FILE ${CMAKE_BINARY_DIR}/OpenBLAS_build_error.log)
+
+# for Linux compile OpenBLAS (No `AR=${NDK_TOOLCHAIN_PATH}/llvm-ar`)
+execute_process(
+    COMMAND bash -c 
+        "make -j8 \
+        HOSTCC=gcc \
+        CC=${NDK_TOOLCHAIN_PATH}/aarch64-linux-android24-clang \
+        BUILD_WITHOUT_LAPACKE=0 \
+        C_LAPACK=1 \
+        NO_CBLAS=0 \
+        NO_LAPACK=0 \
+        USE_OPENMP=1 \
+        NOFORTRAN=1 \
+        TARGET=CORTEXA57 \
+        RANLIB=${NDK_TOOLCHAIN_PATH}/llvm-ranlib \
+        CFLAGS=-DANDROID \
+		LDFLAGS='-lc -lm'"
+    WORKING_DIRECTORY ${OPENBLAS_PATH}
+    RESULT_VARIABLE result
+    # OUTPUT_FILE ${OUTPUT_FILE}
+    # ERROR_FILE ${ERROR_FILE}
+)
+
+# for MacOS compile OpenBLAS
+# execute_process(
+#     COMMAND bash -c 
+#         "make -j8 \
+#         HOSTCC=gcc \
+#         CC=${NDK_TOOLCHAIN_PATH}/aarch64-linux-android35-clang \
+#         BUILD_WITHOUT_LAPACKE=0 \
+#         C_LAPACK=1 \
+#         NO_CBLAS=0 \
+#         NO_LAPACK=0 \
+#         USE_OPENMP=1 \
+#         NOFORTRAN=1 \
+#         AR=${NDK_TOOLCHAIN_PATH}/llvm-ar \
+#         TARGET=CORTEXA57 \
+#         RANLIB=${NDK_TOOLCHAIN_PATH}/llvm-ranlib \
+#         CFLAGS=-DANDROID"
+#     WORKING_DIRECTORY ${OPENBLAS_PATH}
+#     RESULT_VARIABLE result
+#     # OUTPUT_FILE ${OUTPUT_FILE}
+#     # ERROR_FILE ${ERROR_FILE}
+# )
+
+# if (NOT result EQUAL 0)
+#     message(FATAL_ERROR "Make command failed with result: ${result}. Check logs at: ${OUTPUT_FILE} and ${ERROR_FILE}")
+# endif ()
+
+# 收集所有源文件
+set(LIGHTFAISS_SOURCES
+    # 核心索引文件
+    src/index/FlatIndex.cpp
+)
+
+# 收集所有头文件
+set(LIGHTFAISS_HEADERS
+    # 核心头文件
+    src/index/Device.hpp
+    src/index/FlatIndex.hpp
+    src/index/MetricType.hpp
+)
+
+# CPU BLAS 后端文件
+set(CPU_BLAS_SOURCES
+    src/backend/cpu-blas/distance.cpp
+    src/backend/cpu-blas/L2Norm.cpp
+)
+set(CPU_BLAS_HEADERS
+    src/backend/cpu-blas/distance.hpp
+    src/backend/cpu-blas/L2Norm.hpp
+)
+
+# GPU Kompute 后端文件
+set(GPU_KOMPUTE_SOURCES
+    src/backend/gpu-kompute/distance.cpp
+    src/backend/gpu-kompute/readShader.cpp
+    src/backend/gpu-kompute/L2Norm.cpp
+)
+set(GPU_KOMPUTE_HEADERS
+    src/backend/gpu-kompute/distance.hpp
+    src/backend/gpu-kompute/readShader.hpp
+    src/backend/gpu-kompute/L2Norm.hpp
+)
+
+# 根据选项添加后端文件
+if(USE_CPU_BLAS)
+    list(APPEND LIGHTFAISS_SOURCES ${CPU_BLAS_SOURCES})
+    list(APPEND LIGHTFAISS_HEADERS ${CPU_BLAS_HEADERS})
+endif()
+
+if(USE_GPU_KOMP)
+    list(APPEND LIGHTFAISS_SOURCES ${GPU_KOMPUTE_SOURCES})
+    list(APPEND LIGHTFAISS_HEADERS ${GPU_KOMPUTE_HEADERS})
+endif()
+
+# 创建 edgevecdb 静态库（重命名）
+add_library(edgevecdb STATIC ${LIGHTFAISS_SOURCES} ${LIGHTFAISS_HEADERS})
+
+# 为 fmtlib 添加宏定义以使用 Android 日志
+# if(ANDROID)
+#     target_compile_definitions(edgevecdb INTERFACE FMT_USE_ANDROID_LOG)
+# endif()
+
+# Android特定设置
+if(ANDROID)
+    target_compile_definitions(edgevecdb PRIVATE
+        ANDROID=1
+        __ANDROID__=1
+    )
+    # 确保使用C++17标准
+    set_target_properties(edgevecdb PROPERTIES
+        CXX_STANDARD 17
+        CXX_STANDARD_REQUIRED ON
+        CXX_EXTENSIONS OFF
+    )
+endif()
+
+# 设置头文件包含目录
+target_include_directories(edgevecdb PUBLIC 
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/index
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/backend
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/backend/cpu-blas
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/backend/gpu-kompute
+    ${KOMPUTE_PATH}/src/include
+    ${VULKAN_INCLUDE_DIR}
+)
+
+# 链接库
+# 将所有依赖项收集到一个列表中，以便控制链接顺序
+# set(EDGEDB_LINK_LIBS "")
+
+if(USE_CPU_BLAS)
+	set(TEMP_OPENBLAS_LIBS "/home/ubuntu/chaquopy/server/pypi/libopenblas.a")
+    # if(EXISTS "${OPENBLAS_PATH}/libopenblas.a")
+	if (EXISTS "${TEMP_OPENBLAS_LIBS}")
+        # 将需要系统库的 OpenBLAS 放在最前面
+        # list(APPEND EDGEDB_LINK_LIBS "${OPENBLAS_PATH}/libopenblas.a")
+		list(APPEND EDGEDB_LINK_LIBS "${TEMP_OPENBLAS_LIBS}")
+    else()
+        # message(WARNING "OpenBLAS static library not found at ${OPENBLAS_PATH}/libopenblas.a")
+		message(WARNING "OpenBLAS static library not found at ${TEMP_OPENBLAS_LIBS}")
+    endif()
+endif()
+
+if(USE_GPU_KOMP)
+    target_link_libraries(edgevecdb PUBLIC kompute::kompute)
+    
+    # 这个宏定义也需要传递给 edgevecdb_core，所以使用 PUBLIC 或 INTERFACE
+    if(ANDROID)
+        target_compile_definitions(edgevecdb PUBLIC FMT_USE_ANDROID_LOG)
+    endif()
+endif()
+
+# 添加 OpenMP
+find_package(OpenMP REQUIRED)
+target_link_libraries(edgevecdb PRIVATE OpenMP::OpenMP_CXX)
+
+# Android特定的系统库链接
+# 把它们放在依赖它们的库（如OpenBLAS）之后
+# if(ANDROID)
+#     list(APPEND EDGEDB_LINK_LIBS
+#         log      # Android日志库
+#         c        # Android C运行时库 (提供 stderr)
+#         m        # 数学库
+#         android  # Android平台库
+#     )
+# endif()
+
+# 一次性链接所有库
+# target_link_libraries(edgevecdb PRIVATE ${EDGEDB_LINK_LIBS})
+
+# 构建Python绑定
+if(BUILD_PYTHON_BINDINGS)
+    # 收集Python绑定源文件
+    set(PYTHON_BINDING_SOURCES
+        src/python/module.cpp
+        src/python/numpy_helper.cpp
+        src/python/common/enum_binding.cpp
+        src/python/wrapper/pyFlatIndex.cpp
+        src/python/binding/flatIndexBinding.cpp
+        src/python/binding/L2RenormBinding.cpp
+    )
+
+    # 创建Python模块
+    if(ANDROID)
+        # 对于 Android，使用更兼容的方式创建模块
+        add_library(edgevecdb_core MODULE ${PYTHON_BINDING_SOURCES})
+        target_link_libraries(edgevecdb_core PRIVATE pybind11::module)
+        target_compile_definitions(edgevecdb_core PRIVATE MODULE_NAME=edgevecdb_core)
+        set_target_properties(edgevecdb_core PROPERTIES 
+            PREFIX ""
+            SUFFIX ".so"
+        )
+
+		target_compile_definitions(edgevecdb_core PRIVATE FMT_USE_ANDROID_LOG)
+    else()
+        # 非 Android 使用标准 pybind11 方法
+        pybind11_add_module(edgevecdb_core ${PYTHON_BINDING_SOURCES})
+    endif()
+
+    # 设置编译属性
+    target_compile_definitions(edgevecdb_core PRIVATE 
+        VERSION_INFO=${PROJECT_VERSION}
+        EDGEVECDB_VERSION="${PROJECT_VERSION}"
+    )
+
+    # 设置包含目录
+    target_include_directories(edgevecdb_core PRIVATE 
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/index
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/backend
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/backend/cpu-blas
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/backend/gpu-kompute
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/python
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/python/common
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/python/wrapper
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/python/binding
+        ${KOMPUTE_PATH}/src/include
+        ${VULKAN_INCLUDE_DIR}
+        ${Python_NumPy_INCLUDE_DIRS}
+    )
+
+
+	# 收集 edgevecdb_core 的所有依赖库
+	    # 链接 edgevecdb_core 模块
+    # 步骤1：首先链接我们的核心静态库。
+    # CMake 会自动处理 edgevecdb 传递过来的 PUBLIC 依赖 (如 kompute)。
+    target_link_libraries(edgevecdb_core PRIVATE edgevecdb)
+
+    # 步骤2：链接 Python 库。
+    target_link_libraries(edgevecdb_core PRIVATE ${Python_LIBRARIES})
+    
+    # 步骤3：如果使用 CPU BLAS，链接 OpenBLAS 静态库。
+    # 我们直接链接这个.a文件。
+    if(USE_CPU_BLAS)
+        # set(TEMP_OPENBLAS_LIBS "/home/ubuntu/chaquopy/server/pypi/libopenblas.a")
+		if(EXISTS "${OPENBLAS_PATH}/libopenblas.a")
+        # if (EXISTS "${TEMP_OPENBLAS_LIBS}")
+            target_link_libraries(edgevecdb_core PRIVATE "${OPENBLAS_PATH}/libopenblas.a")
+        else()
+            message(FATAL_ERROR "OpenBLAS static library not found at ${OPENBLAS_PATH}/libopenblas.a")
+        endif()
+    endif()
+
+    # 步骤4 (最关键的一步): 链接 Android 系统库。
+    # 把它们放在最后，这样前面所有库（edgevecdb, OpenBLAS, OpenMP等）
+    # 产生的未定义符号 (如 stderr, sin, cos) 都能在这里被找到。
+	if(ANDROID)
+        target_link_libraries(edgevecdb_core PRIVATE
+            log      # Android 日志库
+            android  # Android 平台库
+        )
+        # 使用 target_link_options 明确添加 -lc 和 -lm 标志
+        # 这比直接写库名 'c' 和 'm' 更可靠，能确保它们被正确传递给链接器
+        target_link_options(edgevecdb_core PRIVATE "-lc" "-lm")
+    endif()
+
+    # 设置模块属性
+    set_target_properties(edgevecdb_core PROPERTIES
+        CXX_STANDARD 17
+        CXX_STANDARD_REQUIRED ON
+        CXX_EXTENSIONS OFF
+        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/edgevecdb
+    )
+
+    # 复制Python包文件
+    configure_file(
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/python/__init__.py
+        ${CMAKE_BINARY_DIR}/edgevecdb/__init__.py
+        COPYONLY
+    )
+
+    # 为Android设置特殊属性
+    if(ANDROID)
+        target_compile_definitions(edgevecdb_core PRIVATE
+            ANDROID=1
+            __ANDROID__=1
+        )
+    endif()
+endif()
+
+# 可选：编译测试程序（如果需要的话）
+if(BUILD_TESTS)
+    add_executable(testFlatIndex src/test/testFlatIndex.cpp)
+    target_link_libraries(testFlatIndex edgevecdb)
+    
+    if(USE_GPU_KOMP)
+        add_executable(testFlatIndexGpu src/test/testFlatIndexGpu.cpp)
+        target_link_libraries(testFlatIndexGpu edgevecdb)
+    endif()
+endif()
+
+
