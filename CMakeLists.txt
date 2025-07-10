@@ -4,6 +4,17 @@ project(edgevecdb LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -g -O3 -fno-omit-frame-pointer")
+
+
+# find_package(OpenMP REQUIRED)
+
+# message(STATUS "OpenMP_CXX_FLAGS: ${OpenMP_CXX_FLAGS}")
+# message(STATUS "OpenMP_CXX_LIB_NAMES: ${OpenMP_CXX_LIB_NAMES}")
+# message(STATUS "OpenMP_CXX_LIBRARIES: ${OpenMP_CXX_LIBRARIES}")
+# message(FATAL_ERROR "OpenMP_CXX_INCLUDE_DIRS: ${OpenMP_CXX_INCLUDE_DIRS}")
+
+
 # 调试信息
 message(STATUS "CMAKE_SOURCE_DIR: ${CMAKE_SOURCE_DIR}")
 message(STATUS "CMAKE_CURRENT_SOURCE_DIR: ${CMAKE_CURRENT_SOURCE_DIR}")
@@ -14,11 +25,11 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 # 选项：启用/禁用不同后端
 option(USE_CPU_BLAS "Enable CPU BLAS backend" ON)
-option(USE_GPU_KOMP "Enable GPU Kompute backend" OFF)
+option(USE_GPU_KOMP "Enable GPU Kompute backend" ON)
 option(USE_NPU_HEXAGON "Enable NPU Hexagon backend" OFF)
 option(BUILD_PYTHON_BINDINGS "Build Python bindings" ON)
 
-set(BUILD_SHARED_LIBS ON)
+# set(BUILD_SHARED_LIBS ON)
 
 # Kompute路径（你可以将 external 目录放在 myDB 根目录下）
 set(KOMPUTE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/external/kompute")
@@ -60,6 +71,7 @@ option(KOMPUTE_OPT_FROM_SOURCE "Whether to build example from source or from git
 
 set(KOMPUTE_OPT_ANDROID_BUILD ON)
 set(KOMPUTE_OPT_DISABLE_VK_DEBUG_LAYERS ON)
+set(BUILD_SHARED_LIBS OFF)
 
 include_directories(${KOMPUTE_PATH}/src/include)
 include_directories(${CMAKE_BINARY_DIR}/external/kompute/src/shaders/glsl)
@@ -206,6 +218,7 @@ if(USE_GPU_KOMP)
     target_link_libraries(edgevecdb kompute::kompute)
 endif()
 
+set(OpenMP_USE_STATIC_LIBS ON)
 find_package(OpenMP REQUIRED)
 target_link_libraries(edgevecdb OpenMP::OpenMP_CXX)
 
@@ -284,10 +297,10 @@ if(BUILD_PYTHON_BINDINGS)
         message(STATUS "Python executable: ${Python_EXECUTABLE}")
         message(STATUS "Python include dirs: ${Python_INCLUDE_DIRS}")
         message(STATUS "Python NumPy include dirs: ${Python_NumPy_INCLUDE_DIRS}")
-		find_package(Python COMPONENTS Interpreter Development.Module NumPy REQUIRED)
-        message(STATUS "Python executable: ${Python_EXECUTABLE}")
-        message(STATUS "Python include dirs: ${Python_INCLUDE_DIRS}")
-        message(STATUS "Python NumPy include dirs: ${Python_NumPy_INCLUDE_DIRS}")
+		# find_package(Python COMPONENTS Interpreter Development.Module NumPy REQUIRED)
+        # message(STATUS "Python executable: ${Python_EXECUTABLE}")
+        # message(STATUS "Python include dirs: ${Python_INCLUDE_DIRS}")
+        # message(STATUS "Python NumPy include dirs: ${Python_NumPy_INCLUDE_DIRS}")
         find_package(Python3 REQUIRED COMPONENTS Interpreter)
         find_package(pybind11 REQUIRED)
     endif()
@@ -376,21 +389,58 @@ if(BUILD_PYTHON_BINDINGS)
 
 	# 链接必要的库
 	target_link_libraries(edgevecdb_core PRIVATE 
+			-Wl,--no-as-needed
 			edgevecdb
 			kompute::kompute
 			${Python_LIBRARIES}  
 			${Python_NumPy_LIBRARIES}
 			-lc)
 
+	# 添加kp子目录（仅在启用GPU后端时）
+	if(USE_GPU_KOMP)
+	 	add_dependencies(edgevecdb_core kp)
+		# add_subdirectory(./src/python/kp)
+		# 直接在此处构建 kp 模块
+		add_library(kp MODULE src/python/kp/src/main.cpp)
+		target_link_libraries(kp PRIVATE pybind11::module)
+		target_compile_definitions(kp PRIVATE MODULE_NAME=kp)
+		set_target_properties(kp PROPERTIES 
+			PREFIX ""
+			OUTPUT_NAME "kp"
+			SUFFIX ".so"
+		)
+
+		set_target_properties(
+				kp PROPERTIES
+				LIBRARY_OUTPUT_DIRECTORY ${PYTHON_MODULE_OUTPUT_DIR}/kp
+		)
+
+		target_include_directories(kp PRIVATE 
+			${CMAKE_CURRENT_SOURCE_DIR}/src/python/kp/include
+		)
+
+		target_link_libraries(
+				kp PRIVATE
+				kompute::kompute
+				${Python_LIBRARIES}
+				${Python_NumPy_LIBRARIES}
+		)
+
+		# 在kp子目录中创建__init__.py
+		set(KP_INIT_PY ${PYTHON_MODULE_OUTPUT_DIR}/kp/__init__.py)
+		add_custom_command(
+			TARGET kp POST_BUILD
+			COMMAND ${CMAKE_COMMAND} -E make_directory ${PYTHON_MODULE_OUTPUT_DIR}/kp
+			COMMAND ${CMAKE_COMMAND} -E echo "from .kp import *" > ${KP_INIT_PY}
+		)
+	endif()
+	
 	add_custom_command(
 		TARGET edgevecdb_core POST_BUILD
 		COMMAND ${CMAKE_COMMAND} -E copy
-			${CMAKE_CURRENT_SOURCE_DIR}/__init__.py
+			${CMAKE_CURRENT_SOURCE_DIR}/src/python/__init__.py
 			${PYTHON_MODULE_OUTPUT_DIR}/__init__.py
 	)
-
-	# 添加kp子目录
-	add_subdirectory(./src/python/kp)
 endif()
 
 # add_subdirectory(${OPENBLAS_PATH} ${CMAKE_BINARY_DIR}/external/OpenBLAS)

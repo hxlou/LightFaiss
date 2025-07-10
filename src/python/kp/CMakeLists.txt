@@ -8,8 +8,8 @@ set_target_properties(kp PROPERTIES
 	SUFFIX ".so"
 )
 
-# 指定输出目录为当前源目录
-set(PYTHON_MODULE_OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR}/../lightfaiss)
+# 指定输出目录为主项目的 edgevecdb 目录
+set(PYTHON_MODULE_OUTPUT_DIR ${CMAKE_BINARY_DIR}/edgevecdb)
 
 set_target_properties(
         kp PROPERTIES
@@ -21,4 +21,6 @@ include_directories(
 
 target_link_libraries(
         kp PRIVATE
-        kompute::kompute)
+        kompute::kompute
+        ${Python_LIBRARIES}
+        ${Python_NumPy_LIBRARIES})
