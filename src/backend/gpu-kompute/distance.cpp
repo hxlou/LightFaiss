@@ -159,8 +159,8 @@ void matmul (
     //     std::lock_guard<std::mutex> lock(FlatIndex::assetManagerMutex_);
     //     shader = readSpvAsset(FlatIndex::assetManager_, "shaders/matmul.comp.spv");
     // }
-    uint32_t* shaderPtr = reinterpret_cast<uint32_t*>(kp::matmul_o2_comp_spv);
-    std::vector<uint32_t> shader(shaderPtr, shaderPtr + kp::matmul_o2_comp_spv_len / sizeof(uint32_t));
+    uint32_t* shaderPtr = reinterpret_cast<uint32_t*>(gpu_kompute::matmul_o2_comp_spv);
+    std::vector<uint32_t> shader(shaderPtr, shaderPtr + gpu_kompute::matmul_o2_comp_spv_len / sizeof(uint32_t));
     
 
     std::vector<uint32_t> pushConsts = {
@@ -204,8 +204,8 @@ void vecsNorm (
     // norms : n * 1
     // norms[i] = vecs[i*dim + 0] ^ 2 + ... + vecs[i * dim + (dim - 1)] ^ 2
     // auto shader = readSpvFile("src/backend/gpu-kompute/shaders/L2Norm.comp.spv");
-    uint32_t* shaderPtr = reinterpret_cast<uint32_t*>(kp::L2Norm_comp_spv);
-    std::vector<uint32_t> shader(shaderPtr, shaderPtr + kp::L2Norm_comp_spv_len / sizeof(uint32_t));
+    uint32_t* shaderPtr = reinterpret_cast<uint32_t*>(gpu_kompute::L2Norm_comp_spv);
+    std::vector<uint32_t> shader(shaderPtr, shaderPtr + gpu_kompute::L2Norm_comp_spv_len / sizeof(uint32_t));
 
     std::vector<uint32_t> pushConsts = {
         static_cast<uint32_t>(n),
@@ -246,8 +246,8 @@ void calL2Add (
     // L2[i][j] = xNorm[i] + yNorm[j] - 2 * IP[i][j]
 
     // auto shader = readSpvFile("src/backend/gpu-kompute/shaders/L2NormAdd.comp.spv");
-    uint32_t* shaderPtr = reinterpret_cast<uint32_t*>(kp::L2NormAdd_comp_spv);
-    std::vector<uint32_t> shader(shaderPtr, shaderPtr + kp::L2NormAdd_comp_spv_len / sizeof(uint32_t));
+    uint32_t* shaderPtr = reinterpret_cast<uint32_t*>(gpu_kompute::L2NormAdd_comp_spv);
+    std::vector<uint32_t> shader(shaderPtr, shaderPtr + gpu_kompute::L2NormAdd_comp_spv_len / sizeof(uint32_t));
 
     std::vector<uint32_t> pushConsts = {
         static_cast<uint32_t>(nx),
