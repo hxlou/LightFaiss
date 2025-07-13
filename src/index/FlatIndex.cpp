@@ -11,12 +11,16 @@ std::mutex FlatIndex::assetManagerMutex_;
 #include <iostream>
 FlatIndex::FlatIndex(uint64_t dim, uint64_t capacity, bool isFloat16, MetricType metricType, kp::Manager* mgr)
         : dim_(dim), num_(0), capacity_(capacity), isFloat16_(isFloat16), metricType_(metricType), mgr_(mgr) {
+    this->realMgr_ = kp::Manager();
+    this->mgr_ = &this->realMgr_; // 使用实际的Kompute管理器实例
     data_.resize(capacity * dim);
     dataNorm_.resize(capacity * dim); // 初始化Norm数据
 }
 
 FlatIndex::FlatIndex(uint64_t dim, kp::Manager* mgr, MetricType metricType) {
     // 创建一个空的FlatIndex
+    this->realMgr_ = kp::Manager();
+    this->mgr_ = &this->realMgr_; // 使用实际的Kompute管理器实例
     dim_ = dim;
     num_ = 0;
     capacity_ = 0;              // 默认容量

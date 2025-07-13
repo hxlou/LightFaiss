@@ -15,17 +15,14 @@ void bind_flat_index(py::module& m) {
                         bool isFloat16, 
                         MetricType metricType,
                         py::object mgr_py_obj) { // 1. 接收 Python kp.Manager 对象作为 py::object
-            
-            // 2. 检查传入的是否是 None
-            if (mgr_py_obj.is_none()) {
-                return std::make_unique<PyFlatIndex>(dim, capacity, isFloat16, metricType, nullptr);
-            }
 
-            // 3. 将 py::object 转换为 C++ kp::Manager 的引用
-            kp::Manager& mgr_ref = mgr_py_obj.cast<kp::Manager&>();
+            // // 3. 将 py::object 转换为 C++ kp::Manager 的引用
+            // kp::Manager& mgr_ref = mgr_py_obj.cast<kp::Manager&>();
 
-            // 4. 获取引用的地址，得到 C++ 指针
-            kp::Manager* mgr_ptr = &mgr_ref;
+            // // 4. 获取引用的地址，得到 C++ 指针
+            // kp::Manager* mgr_ptr = &mgr_ref;
+
+            kp::Manager* mgr_ptr = nullptr;
 
             // 5. 调用 C++ 构造函数，并返回新创建的对象
             return std::make_unique<PyFlatIndex>(dim, capacity, isFloat16, metricType, mgr_ptr);
@@ -51,12 +48,12 @@ void bind_flat_index(py::module& m) {
         .def(py::init([](uint64_t dim, py::object mgr_py_obj, MetricType metricType) {
             // 检查传入参数是否为None
             kp::Manager* mgr_ptr = nullptr;
-            if (!mgr_py_obj.is_none()) {
-                // 将 py::object 转换为 C++ kp::Manager 的引用
-                kp::Manager& mgr_ref = mgr_py_obj.cast<kp::Manager&>();
-                // 获取引用的地址，得到 C++ 指针    
-                mgr_ptr = &mgr_ref;
-            }
+            // if (!mgr_py_obj.is_none()) {
+            //     // 将 py::object 转换为 C++ kp::Manager 的引用
+            //     kp::Manager& mgr_ref = mgr_py_obj.cast<kp::Manager&>();
+            //     // 获取引用的地址，得到 C++ 指针    
+            //     mgr_ptr = &mgr_ref;
+            // }
 
             return std::make_unique<PyFlatIndex>(dim, mgr_ptr, metricType);
         }),

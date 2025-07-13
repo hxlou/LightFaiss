@@ -64,6 +64,7 @@ class FlatIndex
 
     private:
         kp::Manager* mgr_;             // Kompute管理器
+        kp::Manager realMgr_;          // real Kompute管理器
         uint64_t dim_;                      // 向量维度
         uint64_t num_;                      // 向量数量    
         uint64_t capacity_;                 // 向量容量
