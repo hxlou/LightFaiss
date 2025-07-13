@@ -395,45 +395,6 @@ if(BUILD_PYTHON_BINDINGS)
 			${Python_LIBRARIES}  
 			${Python_NumPy_LIBRARIES}
 			-lc)
-
-	# 添加kp子目录（仅在启用GPU后端时）
-	if(USE_GPU_KOMP)
-	 	add_dependencies(edgevecdb_core kp)
-		# add_subdirectory(./src/python/kp)
-		# 直接在此处构建 kp 模块
-		add_library(kp MODULE src/python/kp/src/main.cpp)
-		target_link_libraries(kp PRIVATE pybind11::module)
-		target_compile_definitions(kp PRIVATE MODULE_NAME=kp)
-		set_target_properties(kp PROPERTIES 
-			PREFIX ""
-			OUTPUT_NAME "kp"
-			SUFFIX ".so"
-		)
-
-		set_target_properties(
-				kp PROPERTIES
-				LIBRARY_OUTPUT_DIRECTORY ${PYTHON_MODULE_OUTPUT_DIR}/kp
-		)
-
-		target_include_directories(kp PRIVATE 
-			${CMAKE_CURRENT_SOURCE_DIR}/src/python/kp/include
-		)
-
-		target_link_libraries(
-				kp PRIVATE
-				kompute::kompute
-				${Python_LIBRARIES}
-				${Python_NumPy_LIBRARIES}
-		)
-
-		# 在kp子目录中创建__init__.py
-		set(KP_INIT_PY ${PYTHON_MODULE_OUTPUT_DIR}/kp/__init__.py)
-		add_custom_command(
-			TARGET kp POST_BUILD
-			COMMAND ${CMAKE_COMMAND} -E make_directory ${PYTHON_MODULE_OUTPUT_DIR}/kp
-			COMMAND ${CMAKE_COMMAND} -E echo "from .kp import *" > ${KP_INIT_PY}
-		)
-	endif()
 	
 	add_custom_command(
 		TARGET edgevecdb_core POST_BUILD

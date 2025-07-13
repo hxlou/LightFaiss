@@ -55,6 +55,3 @@ add_custom_command(
         ${CMAKE_CURRENT_SOURCE_DIR}/__init__.py
         ${PYTHON_MODULE_OUTPUT_DIR}/__init__.py
 )
-
-# 添加kp子目录
-add_subdirectory(kp)
