@@ -161,6 +161,7 @@ set(GPU_KOMPUTE_HEADERS
     src/backend/gpu-kompute/distance.hpp
     src/backend/gpu-kompute/readShader.hpp
     src/backend/gpu-kompute/L2Norm.hpp
+    src/backend/gpu-kompute/shader.hpp
 )
 
 # 根据选项添加后端文件
