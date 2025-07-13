@@ -207,7 +207,7 @@ if(USE_CPU_BLAS)
     # 链接OpenBLAS
     # if(EXISTS ${OPENBLAS_PATH}/libopenblas.a)
         # target_link_libraries(edgevecdb ${OPENBLAS_PATH}/libopenblas.a)
-	target_link_libraries(edgevecdb /home/ubuntu/chaquopy/server/pypi/libopenblas.a)
+	target_link_libraries(edgevecdb /home/lhxx/chaquopy/server/pypi/libopenblas.a)
     # else()
         # message(WARNING "OpenBLAS static library not found at ${OPENBLAS_PATH}/libopenblas.a")
     # endif()

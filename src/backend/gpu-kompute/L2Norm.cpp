@@ -1,6 +1,7 @@
 #include "backend/gpu-kompute/L2Norm.hpp"
 #include "backend/gpu-kompute/distance.hpp"
 #include "backend/gpu-kompute/readShader.hpp"
+#include "backend/gpu-kompute/shader.hpp"
 
 #include <kompute/Kompute.hpp>
 
@@ -12,7 +13,8 @@ void normalized_L2(
     size_t nx,
     float* x
 ) {
-    fvec_renorm_L2(mgr, dim, nx, x);
+    kp::Manager tmpMgr;
+    fvec_renorm_L2(&tmpMgr, dim, nx, x);
 }
 
 void fvec_renorm_L2(
@@ -22,7 +24,11 @@ void fvec_renorm_L2(
     float* x            // 输入向量，nx * dim
 ) {
     // 与vecsNorm类似，但是这个函数是原地进行修改，而不是进行额外的计算
-    auto shader = readSpvFile("src/backend/gpu-kompute/shaders/L2ReNorm.comp.spv");
+    // auto shader = readSpvFile("src/backend/gpu-kompute/shaders/L2ReNorm.comp.spv");
+    uint32_t* shaderPtr = reinterpret_cast<uint32_t*>(kp::L2ReNorm_comp_spv);
+    std::vector<uint32_t> shader(shaderPtr, shaderPtr + kp::L2ReNorm_comp_spv_len / sizeof(uint32_t));
+
+
     std::shared_ptr<kp::TensorT<float>> vecs = mgr->tensorT<float>(std::vector<float>(x, x + nx * dim));
 
     std::vector<uint32_t> pushConsts = {
