@@ -27,20 +27,27 @@ void main() {
     uint localRow = gl_LocalInvocationID.y;
     uint localCol = gl_LocalInvocationID.x;
 
-    if (globalRow >= pc.M || globalCol >= pc.N) return;
-
     float sum = 0.0;
 
     // Tiled matrix multiply
     for (uint t = 0; t < (pc.K + TILE_SIZE - 1) / TILE_SIZE; ++t) {
         uint tiledACol = t * TILE_SIZE + localCol;
+
+        if (globalRow < pc.M && tiledACol < pc.K) {
+            uint a_idx = (pc.transX == 0) ? (globalRow * pc.K + tiledACol) : (tiledACol * pc.M + globalRow);
+            Asub[localRow][localCol] = a[a_idx];
+        } else {
+            Asub[localRow][localCol] = 0.0;
+        }
+
         uint tiledBRow = t * TILE_SIZE + localRow;
 
-        // A[row, k]
-        Asub[localRow][localCol] = (tiledACol < pc.K) ? a[globalRow * pc.K + tiledACol] : 0.0;
-
-        // B[k, col]
-        Bsub[localRow][localCol] = (tiledBRow < pc.K) ? b[tiledBRow * pc.N + globalCol] : 0.0;
+        if (tiledBRow < pc.K && globalCol < pc.N) {
+            uint b_idx = (pc.transY == 0) ? (tiledBRow * pc.N + globalCol) : (globalCol * pc.K + tiledBRow);
+            Bsub[localRow][localCol] = b[b_idx];
+        } else {
+            Bsub[localRow][localCol] = 0.0;
+        }
 
         // one barrier only
         barrier();
@@ -53,5 +60,7 @@ void main() {
         barrier(); // ensure shared reuse is safe
     }
 
-    c[globalRow * pc.N + globalCol] = sum;
+    if (globalRow < pc.M && globalCol < pc.N) {
+        c[globalRow * pc.N + globalCol] = sum;
+    }
 }
