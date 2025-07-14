@@ -50,6 +50,15 @@ class FlatIndex
             float* distances
         );
 
+        // 真正的调度函数
+        void search(
+            uint64_t k,
+            uint64_t nQuery,
+            const float* query,
+            uint64_t* results,
+            float* distances
+        );
+
         // 根据索引重建向量
         void reconstruct(
             uint64_t idx,

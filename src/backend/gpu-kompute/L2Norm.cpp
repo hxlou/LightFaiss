@@ -28,7 +28,6 @@ void fvec_renorm_L2(
     uint32_t* shaderPtr = reinterpret_cast<uint32_t*>(gpu_kompute::L2ReNorm_comp_spv);
     std::vector<uint32_t> shader(shaderPtr, shaderPtr + gpu_kompute::L2ReNorm_comp_spv_len / sizeof(uint32_t));
 
-
     std::shared_ptr<kp::TensorT<float>> vecs = mgr->tensorT<float>(std::vector<float>(x, x + nx * dim));
 
     std::vector<uint32_t> pushConsts = {

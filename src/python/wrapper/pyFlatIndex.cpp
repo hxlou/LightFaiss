@@ -105,6 +105,37 @@ py::tuple PyFlatIndex::query_range(py::array_t<float> queries, uint64_t k, uint6
     return py::make_tuple(results, distances);
 }
 
+py::tuple PyFlatIndex::search(py::array_t<float> queries, uint64_t k) {
+    py::buffer_info buf = queries.request();
+    if (buf.ndim != 2) {
+        throw std::runtime_error("Query vectors must be 2D array (n_queries, dim)");
+    }
+    
+    uint64_t nQuery = buf.shape[0];
+    uint64_t dim = buf.shape[1];
+    
+    if (dim != index_->getDim()) {
+        throw std::runtime_error("Query dimension mismatch: expected " + 
+                                std::to_string(index_->getDim()) + ", got " + std::to_string(dim));
+    }
+    
+    // 创建输出数组
+    auto results = NumpyHelper::create_2d_uint64_array(nQuery, k);
+    auto distances = NumpyHelper::create_2d_float_array(nQuery, k);
+    
+    py::buffer_info results_buf = results.request();
+    py::buffer_info distances_buf = distances.request();
+    
+    const float* query_data = static_cast<const float*>(buf.ptr);
+    uint64_t* results_data = static_cast<uint64_t*>(results_buf.ptr);
+    float* distances_data = static_cast<float*>(distances_buf.ptr);
+    
+    index_->search(k, nQuery, query_data, results_data, distances_data);
+
+    return py::make_tuple(results, distances);
+}
+
+
 py::array_t<float> PyFlatIndex::reconstruct(uint64_t idx) {
     // 创建一个新的numpy数组来存储重建的向量
     auto result = py::array_t<float>(index_->getDim());

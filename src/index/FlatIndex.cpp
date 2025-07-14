@@ -6,6 +6,8 @@
 AAssetManager* FlatIndex::assetManager_ = nullptr;
 std::mutex FlatIndex::assetManagerMutex_;
 
+#include <vector>
+#include <thread>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -108,6 +110,146 @@ void FlatIndex::query(
         );
     }
 }
+
+void FlatIndex::search(
+    uint64_t k,
+    uint64_t nQuery,
+    const float* query,
+    uint64_t* results,
+    float* distances
+) {
+    // 在这一层进行调度
+    // 如果nQ * nY > 10000，则使用GPU，否则使用CPU
+    uint64_t nData = num_;
+    uint64_t threshold = 10000;
+
+    if (nQuery * nData <= threshold) {
+        // 计算量小的情况下，直接调用CPU完成计算并返回结果
+        this->query(
+            k,
+            0,
+            nData,
+            DeviceType::CPU_BLAS,
+            nQuery,
+            query,
+            results,
+            distances
+        );
+
+        return;
+    }
+
+    /**
+     * 进行调度计算，保证每个后端的data的数量均满足>=k，这样为每个计算后端
+     * 预先分配的中间结果临时空间会直接填满，不会有空闲空间，方便后续汇总
+     * 处理
+     */
+    std::vector<uint64_t> resultsTmpCPU(nQuery * k, 0);
+    std::vector<uint64_t> resultsTmpGPU(nQuery * k, 0);
+    std::vector<uint64_t> resultsTmpNPU(nQuery * k, 0);
+    
+    std::vector<float> distancesTmpCPU(nQuery * k, 0.0f);
+    std::vector<float> distancesTmpGPU(nQuery * k, 0.0f);
+    std::vector<float> distancesTmpNPU(nQuery * k, 0.0f);
+    
+    // 任务分配（TODO 任务关键，需要结合硬件负载来进行）
+    uint64_t cpu_start  = 0;
+    uint64_t cpu_end    = num_ / 2;            // [start_cpu, end_cpu)
+    uint64_t gpu_start  = num_ / 2;
+    uint64_t gpu_end    = num_;                // [start_gpu, end_gpu)
+    uint64_t npu_start  = UINT64_MAX;
+    uint64_t npu_end    = UINT64_MAX;          // [start_npu, end_npu)
+
+    std::thread cpu_thread;
+    std::thread gpu_thread;
+    std::thread npu_thread;
+
+    // 现有的默认分配：CPU和GPU各分配一半，NPU不分配
+    if (cpu_start != UINT64_MAX) {
+        cpu_thread = std::thread(
+            [&](){
+                index->query(k, cpu_start, cpu_end, DeviceType::CPU_BLAS, nQuery, query, resultsTmpCPU.data(), distancesTmpCPU.data());
+            }
+        );
+    }
+
+    if (gpu_start != UINT64_MAX) {
+        gpu_thread = std::thread(
+            [&](){
+                index->query(k, gpu_start, gpu_end, DeviceType::GPU_KOMPUTE, nQuery, query, resultsTmpGPU.data(), distancesTmpGPU.data());
+            }
+        );
+    }
+
+    if (npu_start != UINT64_MAX) {
+        npu_thread = std::thread(
+            [&](){
+                index->query(k, npu_start, npu_end, DeviceType::NPU_HEXAGON, nQuery, query, resultsTmpNPU.data(), distancesTmpNPU.data());
+            }
+        );
+    }
+    
+    if (cpu_start != UINT64_MAX) {
+        cpu_thread.join();
+    }
+    if (gpu_start != UINT64_MAX) {
+        gpu_thread.join();
+    }
+    if (npu_start != UINT64_MAX) {
+        npu_thread.join();
+    }
+
+    // 汇总结果
+    // IP，最终结果降序（内积结果越大越好）
+    bool isDesc = (this->metricType_ == MetricType::METRIC_INNER_PRODUCT) ? true : false;
+    uint64_t backend_nums = ((cpu_start != UINT64_MAX ? 1 : 0) +
+                             (gpu_start != UINT64_MAX ? 1 : 0) +
+                             (npu_start != UINT64_MAX ? 1 : 0));
+
+    #pragma omp parallel for
+    for (uint64_t i = 0; i < nQuery; ++i) {
+        std::vector<std::pair<float, uint64_t>> results(k * backend_nums);
+        // CPU结果
+        if (cpu_start != UINT64_MAX) {
+            for (uint64_t j = 0; j < k; ++j) {
+                float value = distancesTmpCPU[i * k + j];
+                results[j] = std::make_pair(value, resultsTmpCPU[i * k + j]);
+            }
+        }
+        // GPU结果
+        if (gpu_start != UINT64_MAX) {
+            for (uint64_t j = 0; j < k; ++j) {
+                float value = distancesTmpGPU[i * k + j];
+                results[j + k] = std::make_pair(value, resultsTmpGPU[i * k + j]);
+            }
+        }
+        // NPU结果
+        if (npu_start != UINT64_MAX) {
+            for (uint64_t j = 0; j < k; ++j) {
+                float value = distancesTmpNPU[i * k + j];
+                results[j + 2 * k] = std::make_pair(value, resultsTmpNPU[i * k + j]);
+            }
+        }
+
+        // 排序并取前k个结果
+        std::sort(results.begin(), results.end(),
+                          [](const std::pair<float, uint64_t>& a, const std::pair<float, uint64_t>& b) {
+                                if (isDesc) {
+                                    return a.first > b.first; // 降序排序
+                                }
+                                return a.first < b.first; // 升序排序
+                          });
+
+        // 将前k个结果写入输出
+        for (uint64_t j = 0; j < k; ++j) {
+            distances[i * k + j] = results[j].first;
+            results[i * k + j] = results[j].second;
+        }
+    }
+
+    return;
+}
+
 
 void FlatIndex::reconstruct(
     uint64_t idx,

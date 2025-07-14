@@ -121,6 +121,19 @@ void bind_flat_index(py::module& m) {
              )pbdoc",
              py::arg("queries"), py::arg("k"), py::arg("start"), py::arg("end"), py::arg("device"))
         
+        .def("search", &PyFlatIndex::search,
+             R"pbdoc(
+                 Search the index for nearest neighbors.
+                 
+                 Args:
+                     queries: 2D numpy array of query vectors (n_queries, dim)
+                     k: Number of nearest neighbors to return
+                 
+                 Returns:
+                     Tuple of (indices, distances) as numpy arrays
+             )pbdoc",
+             py::arg("queries"), py::arg("k")) // 这里不暴露 device 参数，内部处理
+
         .def("reconstruct", &PyFlatIndex::reconstruct,
              R"pbdoc(
                  Reconstruct a vector by its index.

@@ -17,8 +17,7 @@ from .shared_storage import (
     set_all_update_flags,
 )
 
-import lightfaiss.lightfaiss_py as lf
-import lightfaiss.kp as kp
+import edgevecdb.edgevecdb_core as lf
 
 @final
 @dataclass
@@ -49,8 +48,8 @@ class LightFaissVectorDBStorage(BaseVectorStorage):
         self._dim = self.embedding_func.embedding_dim
 
         # 初始化一个使用内积的向量索引
-        self._mgr = kp.Maneger()
-        self._index = lf.FlatIndex(self._dim, self._mgr, lf.MetricType.METRIC_INNER_PRODUCT)
+        # self._mgr = kp.Maneger()
+        self._index = lf.FlatIndex(self._dim, None, lf.MetricType.METRIC_INNER_PRODUCT)
         self._id_to_meta = {}
 
         self._load_lightfaiss_index()
@@ -69,7 +68,7 @@ class LightFaissVectorDBStorage(BaseVectorStorage):
                     f"Process {os.getpid()} LIGHTFAISS reloading {self.namespace} due to update by another process."
                 )
                 # 重新载入数据
-                self._index = lf.FlatIndex(self._dim, self._mgr, lf.MetricType.METRIC_INNER_PRODUCT)
+                self._index = lf.FlatIndex(self._dim, None, lf.MetricType.METRIC_INNER_PRODUCT)
                 self._id_to_meta = {}
                 self._load_lightfaiss_index()
                 self.storage_updated.value = False
@@ -127,8 +126,8 @@ class LightFaissVectorDBStorage(BaseVectorStorage):
         
         # 数据转换为float32类型，并进行L2 norm方便后续进行cosine相似度计算
         embeddings = embeddings.astype(np.float32)
-        # TODO: 底层接口还未实现
-        # lf.normalize_L2(embeddings)
+        # TODO: embeddings的形状到底是什么样子的？运行时确认一下
+        lf.normalize_L2_cpu(embeddings, embeddings.shape[0], embeddings.shape[1])
 
         # 插入逻辑
         # 1. 检查哪些向量已经存在
@@ -165,8 +164,8 @@ class LightFaissVectorDBStorage(BaseVectorStorage):
             [query], _priority=5
         )
         embedding = np.array(embedding, dtype=np.float32)
-        # TODO: 底层接口还未实现
-        # lf.normalize_L2(embedding)
+        # TODO: embedding的形状到底是什么样子的？运行时确认一下
+        lf.normalize_L2_cpu(embedding, embedding.shape[0], embedding.shape[1])
 
         logger.info(
             f"Query: {query}, top_k: {top_k}, threshold: {self.cosine_better_than_threshold}"
@@ -174,7 +173,7 @@ class LightFaissVectorDBStorage(BaseVectorStorage):
 
         # 执行查询
         index = await self._get_index()
-        # TODO: search接口还未实现
+        # TODO: 返回值的形状怎么样？
         indices, distances = index.search(embedding, top_k)
 
         distances = distances[0]
@@ -183,7 +182,7 @@ class LightFaissVectorDBStorage(BaseVectorStorage):
         results = []
         for dist, idx in zip(distances, indices):
             if idx == -1:
-                # TODO: search应该返回-1如果没有邻居
+                # TODO: search的返回结果如果是空，应该表达成-1
                 continue
 
             if dist < self.cosine_better_than_threshold:
@@ -274,7 +273,7 @@ class LightFaissVectorDBStorage(BaseVectorStorage):
             new_id_to_meta[new_fid] = vec_meta
         
         async with self._storage_lock:
-            self._index = lf.FlatIndex(self._dim, self._mgr, lf.MetricType.METRIC_INNER_PRODUCT)
+            self._index = lf.FlatIndex(self._dim, None, lf.MetricType.METRIC_INNER_PRODUCT)
             if vectors_to_keep:
                 array = np.array(vectors_to_keep, dtype=np.float32)
                 self._index.add_vectors(array)
@@ -319,7 +318,7 @@ class LightFaissVectorDBStorage(BaseVectorStorage):
         except Exception as e:
             logger.error(f"Failed to load Faiss index or metadata: {e}")
             logger.warning("Starting with an empty LightFaiss index.")
-            self._index = lf.FlatIndex(self._dim, self._mgr, lf.MetricType.METRIC_INNER_PRODUCT)
+            self._index = lf.FlatIndex(self._dim, None, lf.MetricType.METRIC_INNER_PRODUCT)
             self._id_to_meta = {}
 
     async def index_done_callback(self):
@@ -328,7 +327,7 @@ class LightFaissVectorDBStorage(BaseVectorStorage):
                 logger.warning(
                     f"Storage for LIGHTFAISS {self.namespace} was updated by another process, reloading..."
                 )
-                self._index = lf.FlatIndex(self._dim, self._mgr, lf.MetricType.METRIC_INNER_PRODUCT)
+                self._index = lf.FlatIndex(self._dim, None, lf.MetricType.METRIC_INNER_PRODUCT)
                 self._id_to_meta = {}
                 self._load_lightfaiss_index()
                 self.storage_updated.value = False
@@ -382,7 +381,7 @@ class LightFaissVectorDBStorage(BaseVectorStorage):
     async def drop(self) -> dict[str, str]:
         try:
             async with self._storage_lock:
-                self._index = lf.FlatIndex(self._dim, self._mgr, lf.MetricType.METRIC_INNER_PRODUCT)
+                self._index = lf.FlatIndex(self._dim, None, lf.MetricType.METRIC_INNER_PRODUCT)
                 self._id_to_meta = {}
 
                 if os.path.exists(self._lightfaiss_index_file):
