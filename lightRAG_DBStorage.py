@@ -17,7 +17,7 @@ from .shared_storage import (
     set_all_update_flags,
 )
 
-import edgevecdb.edgevecdb_core as lf
+import lightrag.kg.edgevecdb.edgevecdb_core as lf
 
 @final
 @dataclass
@@ -43,7 +43,7 @@ class LightFaissVectorDBStorage(BaseVectorStorage):
         )
         self._meta_file = self._lightfaiss_index_file + ".meta.json"
 
-        self._max_batch_size = self.global_config["embedding_batch_size"]
+        self._max_batch_size = self.global_config["embedding_batch_num"]
         # 向量维度
         self._dim = self.embedding_func.embedding_dim
 
@@ -76,7 +76,7 @@ class LightFaissVectorDBStorage(BaseVectorStorage):
 
     async def upsert(self, data: dict[str, dict[str, Any]]):
         """
-        Insert or update vectors in the Faiss index.
+        Insert or update vectors in the LightFaiss index.
 
         data: {
            "custom_id_1": {
@@ -127,7 +127,7 @@ class LightFaissVectorDBStorage(BaseVectorStorage):
         # 数据转换为float32类型，并进行L2 norm方便后续进行cosine相似度计算
         embeddings = embeddings.astype(np.float32)
         # TODO: embeddings的形状到底是什么样子的？运行时确认一下
-        lf.normalize_L2_cpu(embeddings, embeddings.shape[0], embeddings.shape[1])
+        lf.normalized_L2_cpu(embeddings, embeddings.shape[0], embeddings.shape[1])
 
         # 插入逻辑
         # 1. 检查哪些向量已经存在
@@ -160,12 +160,12 @@ class LightFaissVectorDBStorage(BaseVectorStorage):
             self, query: str, top_k: int, ids: list[str] | None = None
     ) -> list[dict[str, Any]]:
         # 传入string，进行单个查询
-        embedding = await self.embedding_func(
+        embedding = await self.embedding_func( 
             [query], _priority=5
         )
         embedding = np.array(embedding, dtype=np.float32)
         # TODO: embedding的形状到底是什么样子的？运行时确认一下
-        lf.normalize_L2_cpu(embedding, embedding.shape[0], embedding.shape[1])
+        lf.normalized_L2_cpu(embedding, embedding.shape[0], embedding.shape[1])
 
         logger.info(
             f"Query: {query}, top_k: {top_k}, threshold: {self.cosine_better_than_threshold}"
@@ -299,7 +299,7 @@ class LightFaissVectorDBStorage(BaseVectorStorage):
 
     def _load_lightfaiss_index(self):
         if not os.path.exists(self._lightfaiss_index_file):
-            logger.warning("No existing Faiss index file found. Starting fresh.")
+            logger.warning("No existing LightFaiss index file found. Starting fresh.")
             return
 
         try:
@@ -313,10 +313,10 @@ class LightFaissVectorDBStorage(BaseVectorStorage):
                 self._id_to_meta[fid] = meta
             
             logger.info(
-                f"Faiss index loaded with {self._index.ntotal} vectors from {self._faiss_index_file}"
+                f"LightFaiss index loaded with {self._index.get_num()} vectors from {self._lightfaiss_index_file}"
             )
         except Exception as e:
-            logger.error(f"Failed to load Faiss index or metadata: {e}")
+            logger.error(f"Failed to load LightFaiss index or metadata: {e}")
             logger.warning("Starting with an empty LightFaiss index.")
             self._index = lf.FlatIndex(self._dim, None, lf.MetricType.METRIC_INNER_PRODUCT)
             self._id_to_meta = {}
@@ -395,7 +395,7 @@ class LightFaissVectorDBStorage(BaseVectorStorage):
                 await set_all_update_flags(self.namespace)
                 self.storage_updated.value = False
 
-                logger.info(f"Process {os.getpid()} drop FAISS index {self.namespace}")
+                logger.info(f"Process {os.getpid()} drop LIGHT_FAISS index {self.namespace}")
             return {"status": "success", "message": "index dropped"}
         except Exception as e:
             logger.error(f"Failed to drop LightFaiss index {self.namespace}: {e}")

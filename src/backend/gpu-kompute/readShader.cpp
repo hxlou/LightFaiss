@@ -6,8 +6,8 @@
 #include <iostream> // 用于错误输出 (你可以替换为你项目中的日志系统)
 #include <cstdint>  // 用于 uint32_t
 
-#include <android/asset_manager.h>
-#include <android/asset_manager_jni.h>
+// #include <android/asset_manager.h>
+// #include <android/asset_manager_jni.h>
 #include <mutex>
 
 namespace gpu_kompute {
@@ -69,18 +69,18 @@ std::vector<uint32_t> readSpvFile(const std::string& filename) {
     return buffer;
 }
 
-// 读取 SPV 文件
-std::vector<uint32_t> readSpvAsset(AAssetManager* mgr, const char* filename) {
-    AAsset* asset = AAssetManager_open(mgr, filename, AASSET_MODE_STREAMING);
-    if (!asset) {
-        std::cout << "Failed to open asset: " << filename << std::endl;
-        return {};
-    }
-    off_t length = AAsset_getLength(asset);
-    std::vector<uint32_t> buffer(length / sizeof(uint32_t));
-    AAsset_read(asset, buffer.data(), length);
-    AAsset_close(asset);
-    return buffer;
-}
+// // 读取 SPV 文件
+// std::vector<uint32_t> readSpvAsset(AAssetManager* mgr, const char* filename) {
+//     AAsset* asset = AAssetManager_open(mgr, filename, AASSET_MODE_STREAMING);
+//     if (!asset) {
+//         std::cout << "Failed to open asset: " << filename << std::endl;
+//         return {};
+//     }
+//     off_t length = AAsset_getLength(asset);
+//     std::vector<uint32_t> buffer(length / sizeof(uint32_t));
+//     AAsset_read(asset, buffer.data(), length);
+//     AAsset_close(asset);
+//     return buffer;
+// }
 
 } // namespace gpu_kompute

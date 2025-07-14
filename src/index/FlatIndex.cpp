@@ -3,8 +3,8 @@
 #include "backend/gpu-kompute/distance.hpp"
 
 
-AAssetManager* FlatIndex::assetManager_ = nullptr;
-std::mutex FlatIndex::assetManagerMutex_;
+// AAssetManager* FlatIndex::assetManager_ = nullptr;
+// std::mutex FlatIndex::assetManagerMutex_;
 
 #include <vector>
 #include <thread>
