@@ -89,7 +89,7 @@ void calL2(
                               return a.first < b.first; // 升序排序
                           });
         // 将前k个结果写入输出
-        for (uint64_t j = 0; j < min(k, ny); ++j) {
+        for (uint64_t j = 0; j < std::min(k, ny); ++j) {
             outDistances[i * k + j] = results[j].first;
             outIndices[i * k + j] = results[j].second;
         }
@@ -131,7 +131,7 @@ void calIP(
                           });
 
         // 将前k个结果写入输出
-        for (uint64_t j = 0; j < min(j, ny); ++j) {
+        for (uint64_t j = 0; j < std::min(k, ny); ++j) {
             outDistances[i * k + j] = results[j].first;
             outIndices[i * k + j] = results[j].second;
         }
