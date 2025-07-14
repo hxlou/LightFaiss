@@ -29,8 +29,6 @@ public:
     py::tuple query(py::array_t<float> queries, uint64_t k, DeviceType device);
     py::tuple query_range(py::array_t<float> queries, uint64_t k, uint64_t start, uint64_t end, 
                          DeviceType device);
-    py::tuple search(py::array_t<float> queries, uint64_t k);
-
     // 最终实际不应该暴露device参数，应该在FlatIndex内部进行调度处理
     py::tuple search(py::array_t<float> queries, uint64_t k);
 

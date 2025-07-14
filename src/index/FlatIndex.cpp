@@ -168,7 +168,7 @@ void FlatIndex::search(
     if (cpu_start != UINT64_MAX) {
         cpu_thread = std::thread(
             [&](){
-                index->query(k, cpu_start, cpu_end, DeviceType::CPU_BLAS, nQuery, query, resultsTmpCPU.data(), distancesTmpCPU.data());
+                this->query(k, cpu_start, cpu_end, DeviceType::CPU_BLAS, nQuery, query, resultsTmpCPU.data(), distancesTmpCPU.data());
             }
         );
     }
@@ -176,7 +176,7 @@ void FlatIndex::search(
     if (gpu_start != UINT64_MAX) {
         gpu_thread = std::thread(
             [&](){
-                index->query(k, gpu_start, gpu_end, DeviceType::GPU_KOMPUTE, nQuery, query, resultsTmpGPU.data(), distancesTmpGPU.data());
+                this->query(k, gpu_start, gpu_end, DeviceType::GPU_KOMPUTE, nQuery, query, resultsTmpGPU.data(), distancesTmpGPU.data());
             }
         );
     }
@@ -184,7 +184,7 @@ void FlatIndex::search(
     if (npu_start != UINT64_MAX) {
         npu_thread = std::thread(
             [&](){
-                index->query(k, npu_start, npu_end, DeviceType::NPU_HEXAGON, nQuery, query, resultsTmpNPU.data(), distancesTmpNPU.data());
+                this->query(k, npu_start, npu_end, DeviceType::NPU_HEXAGON, nQuery, query, resultsTmpNPU.data(), distancesTmpNPU.data());
             }
         );
     }
@@ -208,32 +208,32 @@ void FlatIndex::search(
 
     #pragma omp parallel for
     for (uint64_t i = 0; i < nQuery; ++i) {
-        std::vector<std::pair<float, uint64_t>> results(k * backend_nums);
+        std::vector<std::pair<float, uint64_t>> results_tmp(k * backend_nums);
         // CPU结果
         if (cpu_start != UINT64_MAX) {
             for (uint64_t j = 0; j < k; ++j) {
                 float value = distancesTmpCPU[i * k + j];
-                results[j] = std::make_pair(value, resultsTmpCPU[i * k + j]);
+                results_tmp[j] = std::make_pair(value, resultsTmpCPU[i * k + j]);
             }
         }
         // GPU结果
         if (gpu_start != UINT64_MAX) {
             for (uint64_t j = 0; j < k; ++j) {
                 float value = distancesTmpGPU[i * k + j];
-                results[j + k] = std::make_pair(value, resultsTmpGPU[i * k + j]);
+                results_tmp[j + k] = std::make_pair(value, resultsTmpGPU[i * k + j]);
             }
         }
         // NPU结果
         if (npu_start != UINT64_MAX) {
             for (uint64_t j = 0; j < k; ++j) {
                 float value = distancesTmpNPU[i * k + j];
-                results[j + 2 * k] = std::make_pair(value, resultsTmpNPU[i * k + j]);
+                results_tmp[j + 2 * k] = std::make_pair(value, resultsTmpNPU[i * k + j]);
             }
         }
 
         // 排序并取前k个结果
-        std::sort(results.begin(), results.end(),
-                          [](const std::pair<float, uint64_t>& a, const std::pair<float, uint64_t>& b) {
+        std::sort(results_tmp.begin(), results_tmp.end(),
+                          [&](const std::pair<float, uint64_t>& a, const std::pair<float, uint64_t>& b) {
                                 if (isDesc) {
                                     return a.first > b.first; // 降序排序
                                 }
@@ -242,8 +242,8 @@ void FlatIndex::search(
 
         // 将前k个结果写入输出
         for (uint64_t j = 0; j < k; ++j) {
-            distances[i * k + j] = results[j].first;
-            results[i * k + j] = results[j].second;
+            distances[i * k + j] = results_tmp[j].first;
+            results[i * k + j] = results_tmp[j].second;
         }
     }
 
