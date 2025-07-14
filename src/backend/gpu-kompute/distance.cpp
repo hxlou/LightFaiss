@@ -40,9 +40,6 @@ void query(
     }
 }
 
-/*
-    使用BLAS计算L2距离
-*/
 void calL2(
     kp::Manager* mgr,
     const float* x,
@@ -92,17 +89,13 @@ void calL2(
                               return a.first < b.first; // 升序排序
                           });
         // 将前k个结果写入输出
-        for (uint64_t j = 0; j < k; ++j) {
+        for (uint64_t j = 0; j < min(k, ny); ++j) {
             outDistances[i * k + j] = results[j].first;
             outIndices[i * k + j] = results[j].second;
         }
     }
 
 }
-
-/*
-    使用BLAS计算IP距离
-*/
 
 void calIP(
     kp::Manager* mgr,           // Kompute管理器
@@ -138,7 +131,7 @@ void calIP(
                           });
 
         // 将前k个结果写入输出
-        for (uint64_t j = 0; j < k; ++j) {
+        for (uint64_t j = 0; j < min(j, ny); ++j) {
             outDistances[i * k + j] = results[j].first;
             outIndices[i * k + j] = results[j].second;
         }
