@@ -9,6 +9,7 @@ std::mutex FlatIndex::assetManagerMutex_;
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include "backend/npu-hexagon/calculator-api.h"
 FlatIndex::FlatIndex(uint64_t dim, uint64_t capacity, bool isFloat16, MetricType metricType, kp::Manager* mgr)
         : dim_(dim), num_(0), capacity_(capacity), isFloat16_(isFloat16), metricType_(metricType), realMgr_() {
     // this->realMgr_ = kp::Manager();
@@ -77,6 +78,7 @@ void FlatIndex::query(
     float* distances
 ) {
     float* dataNorm = dataNorm_.empty() ? nullptr : dataNorm_.data();
+	test_calculator();
     if (device == DeviceType::CPU_BLAS) {
         cpu_blas::query(
             nQuery,

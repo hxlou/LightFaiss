@@ -1,0 +1,13 @@
+#Set NO_QURT_INC to 1 to disable qurt libraries/headers inclusion
+NO_QURT_INC = 1
+
+BUILD_DLLS += libcalculator_skel
+
+libcalculator_skel_QAICIDLS += ../inc/calculator
+libcalculator_skel_C_SRCS += $(OBJ_DIR)/calculator_skel
+libcalculator_skel.C_SRCS += calculator_imp.c
+
+# copy final build products to the ship directory
+BUILD_COPIES += \
+   $(DLLS) \
+   $(SHIP_DIR)/ ;
