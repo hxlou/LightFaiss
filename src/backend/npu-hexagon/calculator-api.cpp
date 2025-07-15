@@ -97,7 +97,12 @@ int calculator_gemm_cpp(const float* matrix1,
 						uint32_t m, uint32_t k, uint32_t n,
 						float* output_matrix,
 						bool transX, bool transY) {
-
+    const char* dsp_path = "/data/local/tmp";
+    if (calculator_init(dsp_path) != 0) {
+        __android_log_print(ANDROID_LOG_ERROR, TAG, "初始化失败");
+        return -1;
+    }
+	
     remote_handle64 handle = 0;
     char* uri = nullptr;
     int nErr = 0;
