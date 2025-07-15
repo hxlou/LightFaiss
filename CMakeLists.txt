@@ -189,10 +189,12 @@ if(USE_NPU_HEXAGON)
 	set(NPU_HEXAGON_SOURCES
 		${CMAKE_CURRENT_BINARY_DIR}/calculator_stub.c
 		${CMAKE_CURRENT_SOURCE_DIR}/src/backend/npu-hexagon/calculator-api.cpp
+		${CMAKE_CURRENT_SOURCE_DIR}/src/backend/npu-hexagon/distance.cpp
 	)
 	set(NPU_HEXAGON_HEADERS
 		${CMAKE_CURRENT_BINARY_DIR}/calculator.h
 		${CMAKE_CURRENT_SOURCE_DIR}/src/backend/npu-hexagon/calculator-api.h
+		${CMAKE_CURRENT_SOURCE_DIR}/src/backend/npu-hexagon/distance.hpp
 	)
 	
 	# 设置 Hexagon SDK 包含目录

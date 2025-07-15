@@ -633,3 +633,32 @@ int calculator_sum(remote_handle64 h, const int* vec, int vecLen, int64* res) {
 
     return 0;
 }
+
+int calculator_gemm(remote_handle64 h, 
+					const float* input_matrix1,
+					int input_matrix1Len,
+					const float* input_matrix2, 
+					int input_matrix2Len,
+					float* output, 
+					int outputLen,
+					uint32_t m, 
+					uint32_t k, 
+					uint32_t n) {
+    if (m == 0 || k == 0 || n == 0) {
+        return 0; 
+    }
+    if (input_matrix1Len < m * k) {
+        return AEE_EBADPARM;
+    }
+    if (input_matrix2Len < k * n) {
+        return AEE_EBADPARM;
+    }
+
+    if (outputLen < m * n) {
+        return AEE_EBADPARM;
+    }
+
+    matmul_ikj_hvx((float*)input_matrix1, (float*)input_matrix2, output, m, k, n);
+
+	return 0;
+}

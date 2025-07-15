@@ -12,5 +12,13 @@
 #include "remote.idl"
 
 interface calculator : remote_handle64{
-   long sum(in sequence<long> vec, rout long long res);
+	long sum(in sequence<long> vec, rout long long res);
+	long gemm(
+		in sequence<float> input_matrix1,
+		in sequence<float> input_matrix2,
+		rout sequence<float> output,
+		in uint32 m,
+		in uint32 k,
+		in uint32 n
+	);
 };

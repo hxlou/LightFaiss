@@ -92,7 +92,106 @@ bail:
     return result;
 }
 
-// 演示如何使用NPU计算sum的主函数
+int calculator_gemm_cpp(const float* matrix1,
+                        const float* matrix2,
+                        uint32_t m, uint32_t k, uint32_t n,
+                        float* output_matrix) {
+
+    remote_handle64 handle = 0;
+    char* uri = nullptr;
+    int nErr = 0;
+    int ret = 0;
+
+    float* dsp_matrix1 = nullptr;
+    float* dsp_matrix2 = nullptr;
+    float* dsp_output = nullptr;
+
+    size_t matrix1_bytes = m * k * sizeof(float);
+    size_t matrix2_bytes = k * n * sizeof(float);
+    size_t output_bytes = m * n * sizeof(float);
+
+    __android_log_print(ANDROID_LOG_INFO, TAG, "GEMM: m=%u, k=%u, n=%u", m, k, n);
+
+    // 分配 ION 内存
+    __android_log_print(ANDROID_LOG_INFO, TAG, "GEMM: Allocating ION memory for inputs and output...");
+    dsp_matrix1 = (float*)rpcmem_alloc(RPCMEM_HEAP_ID_SYSTEM, RPCMEM_DEFAULT_FLAGS, matrix1_bytes);
+    if (!dsp_matrix1) {
+        __android_log_print(ANDROID_LOG_ERROR, TAG, "GEMM Error: rpcmem_alloc failed for matrix1.");
+        ret = -1;
+        goto bail;
+    }
+
+    dsp_matrix2 = (float*)rpcmem_alloc(RPCMEM_HEAP_ID_SYSTEM, RPCMEM_DEFAULT_FLAGS, matrix2_bytes);
+    if (!dsp_matrix2) {
+        __android_log_print(ANDROID_LOG_ERROR, TAG, "GEMM Error: rpcmem_alloc failed for matrix2.");
+        ret = -1;
+        goto bail;
+    }
+    
+    dsp_output = (float*)rpcmem_alloc(RPCMEM_HEAP_ID_SYSTEM, RPCMEM_DEFAULT_FLAGS, output_bytes);
+    if (!dsp_output) {
+        __android_log_print(ANDROID_LOG_ERROR, TAG, "GEMM Error: rpcmem_alloc failed for output.");
+        ret = -1;
+        goto bail;
+    }
+    memcpy(dsp_matrix1, matrix1, matrix1_bytes);
+    memcpy(dsp_matrix2, matrix2, matrix2_bytes);
+
+    __android_log_print(ANDROID_LOG_INFO, TAG, "GEMM: Opening handle...");
+    uri = (char*)calculator_URI "&_dom=cdsp";
+    // TODO: remote_session_control 应该只需要在进程生命周期内调用一次，
+    if(remote_session_control) {
+        struct remote_rpc_control_unsigned_module data;
+        data.enable = 1;
+        data.domain = CDSP_DOMAIN_ID;
+        if (0 != (nErr = remote_session_control(DSPRPC_CONTROL_UNSIGNED_MODULE, (void*)&data, sizeof(data)))) {
+            __android_log_print(ANDROID_LOG_ERROR, TAG, "GEMM Error: remote_session_control failed, returned 0x%x", nErr);
+            ret = -1;
+            goto bail;
+        }
+    } else {
+        __android_log_print(ANDROID_LOG_ERROR, TAG, "GEMM Error: remote_session_control is not supported.");
+        ret = -1;
+        goto bail;
+    }
+
+    nErr = calculator_open(uri, &handle);
+    if (nErr != 0) {
+        __android_log_print(ANDROID_LOG_ERROR, TAG, "GEMM Error: Handle open failed, returned 0x%x", nErr);
+        ret = -1;
+        goto bail;
+    }
+
+    __android_log_print(ANDROID_LOG_INFO, TAG, "GEMM: Calling remote function calculator_gemm...");
+    nErr = calculator_gemm(handle,
+                           dsp_matrix1, m * k,
+                           dsp_matrix2, k * n,
+                           dsp_output, m * n,
+                           m, k, n);
+                           
+    if (nErr != 0) {
+        __android_log_print(ANDROID_LOG_ERROR, TAG, "GEMM Error: calculator_gemm call failed, returned 0x%x", nErr);
+        ret = -1;
+    } else {
+        __android_log_print(ANDROID_LOG_INFO, TAG, "GEMM: Remote call successful.");
+        memcpy(output_matrix, dsp_output, output_bytes);
+    }
+
+
+bail:
+    __android_log_print(ANDROID_LOG_INFO, TAG, "GEMM: Cleaning up resources...");
+    if (handle) {
+        if (calculator_close(handle) != 0) {
+            __android_log_print(ANDROID_LOG_ERROR, TAG, "GEMM Warning: Handle close failed.");
+        }
+    }
+    if (dsp_matrix1) rpcmem_free(dsp_matrix1);
+    if (dsp_matrix2) rpcmem_free(dsp_matrix2);
+    if (dsp_output) rpcmem_free(dsp_output);
+
+    return ret;
+}
+
 int test_calculator() {
     __android_log_print(ANDROID_LOG_INFO, TAG, "=== NPU Calculator 示例 ===");
     

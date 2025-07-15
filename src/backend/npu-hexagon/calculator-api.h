@@ -79,4 +79,23 @@ int test_calculator();
 }
 #endif
 
+
+/**
+ * 使用NPU计算矩阵乘法
+ * 
+ * @param matrix1 输入矩阵1
+ * @param matrix2 输入矩阵2
+ * @param m 矩阵1的行数
+ * @param k 矩阵1的列数（也是矩阵2的行数）
+ * @param n 矩阵2的列数
+ * @param output_matrix 输出矩阵，大小为 m x n
+ * @return 0 表示成功，非0 表示失败
+ * 
+ * @note 调用此函数前必须先调用calculator_init()进行初始化
+ */
+int calculator_gemm_cpp(const float* matrix1,
+                        const float* matrix2,
+                        uint32_t m, uint32_t k, uint32_t n,
+                        float* output_matrix);
+
 #endif // CALCULATOR_H

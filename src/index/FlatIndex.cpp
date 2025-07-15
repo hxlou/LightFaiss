@@ -1,6 +1,7 @@
 #include "index/FlatIndex.hpp"
 #include "backend/cpu-blas/distance.hpp"
 #include "backend/gpu-kompute/distance.hpp"
+#include "backend/npu-hexagon/distance.hpp"
 
 
 AAssetManager* FlatIndex::assetManager_ = nullptr;
@@ -9,7 +10,6 @@ std::mutex FlatIndex::assetManagerMutex_;
 #include <filesystem>
 #include <fstream>
 #include <iostream>
-#include "backend/npu-hexagon/calculator-api.h"
 FlatIndex::FlatIndex(uint64_t dim, uint64_t capacity, bool isFloat16, MetricType metricType, kp::Manager* mgr)
         : dim_(dim), num_(0), capacity_(capacity), isFloat16_(isFloat16), metricType_(metricType), realMgr_() {
     // this->realMgr_ = kp::Manager();
@@ -78,7 +78,6 @@ void FlatIndex::query(
     float* distances
 ) {
     float* dataNorm = dataNorm_.empty() ? nullptr : dataNorm_.data();
-	test_calculator();
     if (device == DeviceType::CPU_BLAS) {
         cpu_blas::query(
             nQuery,
@@ -108,7 +107,22 @@ void FlatIndex::query(
             metricType_,
             nullptr
         );
-    }
+    } else if (device == DeviceType::NPU_HEXAGON) {
+		npu_hexagon::query(
+            nQuery,
+            end - start,
+            k,
+            this->dim_,
+            query,
+            this->data_.data() + start * dim_,
+            dataNorm + start * dim_,
+            distances,
+            results,
+            metricType_
+        );
+	} else {
+		throw std::invalid_argument("Unsupported device type for query");
+	}
 }
 
 void FlatIndex::reconstruct(
