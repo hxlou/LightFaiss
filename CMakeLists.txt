@@ -1,10 +1,13 @@
 cmake_minimum_required(VERSION 3.16)
-project(edgevecdb LANGUAGES CXX)
+project(edgevecdb LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -g -O3 -fno-omit-frame-pointer")
+
+set(CMAKE_C_STANDARD 99)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -g -O3 -fno-omit-frame-pointer")
 
 
 # find_package(OpenMP REQUIRED)
@@ -26,7 +29,7 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 # 选项：启用/禁用不同后端
 option(USE_CPU_BLAS "Enable CPU BLAS backend" ON)
 option(USE_GPU_KOMP "Enable GPU Kompute backend" ON)
-option(USE_NPU_HEXAGON "Enable NPU Hexagon backend" OFF)
+option(USE_NPU_HEXAGON "Enable NPU Hexagon backend" ON)
 option(BUILD_PYTHON_BINDINGS "Build Python bindings" ON)
 
 # set(BUILD_SHARED_LIBS ON)
@@ -45,27 +48,27 @@ set(VULKAN_SDK_VERSION 1.3.296.0)
 set(VULKAN_SDK_DIR ${CMAKE_CURRENT_SOURCE_DIR}/external/vulkan)
 # For Windows and macOS, set this after installing Vulkan SDK
 # For example, set(VULKAN_INCLUDE_DIR /Users/example/VulkanSDK/1.3.296.0/macOS/include)
-set(VULKAN_INCLUDE_DIR /Users/zlaa/VulkanSDK/1.3.296.0/macOS/include)
-if(${CMAKE_HOST_SYSTEM_NAME} STREQUAL "Linux")
-    if(NOT EXISTS ${VULKAN_INCLUDE_DIR})
-        file(DOWNLOAD
-                https://sdk.lunarg.com/sdk/download/${VULKAN_SDK_VERSION}/linux/vulkansdk-linux-x86_64-${VULKAN_SDK_VERSION}.tar.xz
-                ${CMAKE_BINARY_DIR}/vulkansdk-linux-x86_64-${VULKAN_SDK_VERSION}.tar.xz
-                SHOW_PROGRESS
-        )
-
-        file(MAKE_DIRECTORY ${VULKAN_SDK_DIR})
-
-        execute_process(
-                COMMAND ${CMAKE_COMMAND} -E tar xJf ${CMAKE_BINARY_DIR}/vulkansdk-linux-x86_64-${VULKAN_SDK_VERSION}.tar.xz
-                WORKING_DIRECTORY ${VULKAN_SDK_DIR}
-        )
-    endif()
-    set(VULKAN_INCLUDE_DIR ${VULKAN_SDK_DIR}/${VULKAN_SDK_VERSION}/x86_64/include)
-endif ()
-if(NOT EXISTS ${VULKAN_INCLUDE_DIR})
-    message(FATAL_ERROR "Vulkan include directory not found: ${VULKAN_INCLUDE_DIR}. Please download and install Vulkan SDK version ${VULKAN_SDK_VERSION} from https://vulkan.lunarg.com/sdk/home")
-endif()
+set(VULKAN_INCLUDE_DIR /home/ubuntu/chaquopy/workdir/vulkan/1.3.296.0/x86_64/include)
+# if(${CMAKE_HOST_SYSTEM_NAME} STREQUAL "Linux")
+#     if(NOT EXISTS ${VULKAN_INCLUDE_DIR})
+#         file(DOWNLOAD
+#                 https://sdk.lunarg.com/sdk/download/${VULKAN_SDK_VERSION}/linux/vulkansdk-linux-x86_64-${VULKAN_SDK_VERSION}.tar.xz
+#                 ${CMAKE_BINARY_DIR}/vulkansdk-linux-x86_64-${VULKAN_SDK_VERSION}.tar.xz
+#                 SHOW_PROGRESS
+#         )
+# 
+#         file(MAKE_DIRECTORY ${VULKAN_SDK_DIR})
+# 
+#         execute_process(
+#                 COMMAND ${CMAKE_COMMAND} -E tar xJf ${CMAKE_BINARY_DIR}/vulkansdk-linux-x86_64-${VULKAN_SDK_VERSION}.tar.xz
+#                 WORKING_DIRECTORY ${VULKAN_SDK_DIR}
+#         )
+#     endif()
+#     set(VULKAN_INCLUDE_DIR ${VULKAN_SDK_DIR}/${VULKAN_SDK_VERSION}/x86_64/include)
+# endif ()
+# if(NOT EXISTS ${VULKAN_INCLUDE_DIR})
+#     message(FATAL_ERROR "Vulkan include directory not found: ${VULKAN_INCLUDE_DIR}. Please download and install Vulkan SDK version ${VULKAN_SDK_VERSION} from https://vulkan.lunarg.com/sdk/home")
+# endif()
 option(KOMPUTE_OPT_GIT_TAG "The tag of the repo to use for the example" v0.9.0)
 option(KOMPUTE_OPT_FROM_SOURCE "Whether to build example from source or from git fetch repo" ON)
 
@@ -141,6 +144,13 @@ set(edgevecdb_HEADERS
     src/index/MetricType.hpp
 )
 
+if(USE_NPU_HEXAGON)
+	set(HEXAGON_SDK_ROOT /local/mnt/workspace/Qualcomm/Hexagon_SDK/6.2.0.1)
+	set(ENV{HEXAGON_SDK_ROOT} ${HEXAGON_SDK_ROOT})
+	set(HEXAGON_CMAKE_ROOT "${HEXAGON_SDK_ROOT}/build/cmake")
+	set(PREBUILT_LIB_DIR "android_aarch64")
+endif()
+
 # CPU BLAS 后端文件
 set(CPU_BLAS_SOURCES
     src/backend/cpu-blas/distance.cpp
@@ -175,6 +185,32 @@ if(USE_GPU_KOMP)
     list(APPEND edgevecdb_HEADERS ${GPU_KOMPUTE_HEADERS})
 endif()
 
+if(USE_NPU_HEXAGON)
+	set(NPU_HEXAGON_SOURCES
+		${CMAKE_CURRENT_BINARY_DIR}/calculator_stub.c
+		${CMAKE_CURRENT_SOURCE_DIR}/src/backend/npu-hexagon/calculator-api.cpp
+		${CMAKE_CURRENT_SOURCE_DIR}/src/backend/npu-hexagon/distance.cpp
+	)
+	set(NPU_HEXAGON_HEADERS
+		${CMAKE_CURRENT_BINARY_DIR}/calculator.h
+		${CMAKE_CURRENT_SOURCE_DIR}/src/backend/npu-hexagon/calculator-api.h
+		${CMAKE_CURRENT_SOURCE_DIR}/src/backend/npu-hexagon/distance.hpp
+	)
+	
+	# 设置 Hexagon SDK 包含目录
+	set(NPU_HEXAGON_INCLUDE_DIRS
+		${CMAKE_CURRENT_BINARY_DIR}/
+		${HEXAGON_SDK_ROOT}/incs/
+		${HEXAGON_SDK_ROOT}/incs/stddef/
+		${HEXAGON_SDK_ROOT}/ipc/fastrpc/rpcmem/inc/
+		${HEXAGON_SDK_ROOT}/utils/examples
+		${CMAKE_CURRENT_SOURCE_DIR}/src/backend/npu-hexagon/dsp/hexagon_Debug_toolv88_v79/
+	)
+	
+	list(APPEND edgevecdb_SOURCES ${NPU_HEXAGON_SOURCES})
+	list(APPEND edgevecdb_HEADERS ${NPU_HEXAGON_HEADERS})
+endif()
+
 # 创建edgevecdb静态库
 add_library(edgevecdb STATIC ${edgevecdb_SOURCES} ${edgevecdb_HEADERS})
 
@@ -199,16 +235,22 @@ target_include_directories(edgevecdb PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src/backend
     ${CMAKE_CURRENT_SOURCE_DIR}/src/backend/cpu-blas
     ${CMAKE_CURRENT_SOURCE_DIR}/src/backend/gpu-kompute
+	${CMAKE_CURRENT_SOURCE_DIR}/src/backend/npu-hexagon
     ${KOMPUTE_PATH}/src/include
     ${VULKAN_INCLUDE_DIR}
 )
+
+# 如果启用了 NPU_HEXAGON，添加相应的包含目录
+if(USE_NPU_HEXAGON)
+    target_include_directories(edgevecdb PUBLIC ${NPU_HEXAGON_INCLUDE_DIRS})
+endif()
 
 # 链接库
 if(USE_CPU_BLAS)
     # 链接OpenBLAS
     # if(EXISTS ${OPENBLAS_PATH}/libopenblas.a)
         # target_link_libraries(edgevecdb ${OPENBLAS_PATH}/libopenblas.a)
-	target_link_libraries(edgevecdb ../../chaquopy/server/pypi/libopenblas.a)
+		target_link_libraries(edgevecdb /home/ubuntu/chaquopy/server/pypi/libopenblas.a)
     # else()
         # message(WARNING "OpenBLAS static library not found at ${OPENBLAS_PATH}/libopenblas.a")
     # endif()
@@ -217,6 +259,19 @@ endif()
 if(USE_GPU_KOMP)
     # 链接Kompute（通过add_subdirectory已经可用）
     target_link_libraries(edgevecdb kompute::kompute)
+endif()
+
+if(USE_NPU_HEXAGON)
+	include(${HEXAGON_CMAKE_ROOT}/hexagon_fun.cmake)
+	build_idl(${CMAKE_CURRENT_SOURCE_DIR}/src/backend/npu-hexagon/inc/calculator.idl edgevecdb)
+    set(CDSRPC_LIB_PATH "${HEXAGON_SDK_ROOT}/ipc/fastrpc/remote/ship/android_aarch64/libcdsprpc.so")
+
+    if(NOT EXISTS ${CDSRPC_LIB_PATH})
+        message(FATAL_ERROR "Hexagon RPC library not found at ${CDSRPC_LIB_PATH}")
+    endif()
+    target_link_libraries(edgevecdb ${CDSRPC_LIB_PATH})
+	find_library(log-lib log)
+	target_link_libraries(edgevecdb ${log-lib})
 endif()
 
 set(OpenMP_USE_STATIC_LIBS ON)
@@ -397,6 +452,18 @@ if(BUILD_PYTHON_BINDINGS)
 			${Python_NumPy_LIBRARIES}
 			-lc)
 	
+	# 不需要这个库，实际运行需要的是设备中的库，所以需要在build-wheel中做一些特判（STANDARD_LIBS）
+	# 如果不在STANDARD_LIBS特判，build-wheel就会强制要求编译的whl包中需要包含libcdsprpc.so
+	# if(USE_NPU_HEXAGON)
+	# 	add_custom_command(
+	# 		TARGET edgevecdb_core POST_BUILD
+	# 		COMMAND ${CMAKE_COMMAND} -E copy_if_different
+	# 			${CDSRPC_LIB_PATH}
+	# 			$<TARGET_FILE_DIR:edgevecdb_core>
+	# 		COMMENT "Copying Hexagon RPC library to wheel output directory"
+	# 	)
+	# endif()
+
 	add_custom_command(
 		TARGET edgevecdb_core POST_BUILD
 		COMMAND ${CMAKE_COMMAND} -E copy

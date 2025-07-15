@@ -10,5 +10,6 @@ void bind_common_enums(py::module& m) {
     py::enum_<DeviceType>(m, "DeviceType")
         .value("CPU", DeviceType::CPU_BLAS)
         .value("GPU", DeviceType::GPU_KOMPUTE)
+        .value("NPU", DeviceType::NPU_HEXAGON)
         .export_values();
 };

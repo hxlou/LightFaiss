@@ -1,6 +1,7 @@
 #include "index/FlatIndex.hpp"
 #include "backend/cpu-blas/distance.hpp"
 #include "backend/gpu-kompute/distance.hpp"
+#include "backend/npu-hexagon/distance.hpp"
 
 
 AAssetManager* FlatIndex::assetManager_ = nullptr;
@@ -108,7 +109,22 @@ void FlatIndex::query(
             metricType_,
             nullptr
         );
-    }
+    } else if (device == DeviceType::NPU_HEXAGON) {
+		npu_hexagon::query(
+            nQuery,
+            end - start,
+            k,
+            this->dim_,
+            query,
+            this->data_.data() + start * dim_,
+            dataNorm + start * dim_,
+            distances,
+            results,
+            metricType_
+        );
+	} else {
+		throw std::invalid_argument("Unsupported device type for query");
+	}
 }
 
 void FlatIndex::search(
