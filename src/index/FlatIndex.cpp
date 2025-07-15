@@ -170,11 +170,11 @@ void FlatIndex::search(
     
     // 任务分配（TODO 任务关键，需要结合硬件负载来进行）
     uint64_t cpu_start  = 0;
-    uint64_t cpu_end    = num_ / 2;            // [start_cpu, end_cpu)
-    uint64_t gpu_start  = num_ / 2;
-    uint64_t gpu_end    = num_;                // [start_gpu, end_gpu)
-    uint64_t npu_start  = UINT64_MAX;
-    uint64_t npu_end    = UINT64_MAX;          // [start_npu, end_npu)
+    uint64_t cpu_end    = num_ / 3;            // [start_cpu, end_cpu)
+    uint64_t gpu_start  = num_ / 3;
+    uint64_t gpu_end    = 2 * num_ / 3;        // [start_gpu, end_gpu)
+    uint64_t npu_start  = 2 * num_ / 3;
+    uint64_t npu_end    = num_ ;               // [start_npu, end_npu)
 
     std::thread cpu_thread;
     std::thread gpu_thread;
