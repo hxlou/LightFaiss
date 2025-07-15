@@ -94,8 +94,9 @@ int test_calculator();
  * @note 调用此函数前必须先调用calculator_init()进行初始化
  */
 int calculator_gemm_cpp(const float* matrix1,
-                        const float* matrix2,
-                        uint32_t m, uint32_t k, uint32_t n,
-                        float* output_matrix);
+						const float* matrix2,
+						uint32_t m, uint32_t k, uint32_t n,
+						float* output_matrix,
+						bool transX, bool transY);
 
 #endif // CALCULATOR_H

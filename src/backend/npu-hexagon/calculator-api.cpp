@@ -93,9 +93,10 @@ bail:
 }
 
 int calculator_gemm_cpp(const float* matrix1,
-                        const float* matrix2,
-                        uint32_t m, uint32_t k, uint32_t n,
-                        float* output_matrix) {
+						const float* matrix2,
+						uint32_t m, uint32_t k, uint32_t n,
+						float* output_matrix,
+						bool transX, bool transY) {
 
     remote_handle64 handle = 0;
     char* uri = nullptr;
@@ -164,10 +165,11 @@ int calculator_gemm_cpp(const float* matrix1,
 
     __android_log_print(ANDROID_LOG_INFO, TAG, "GEMM: Calling remote function calculator_gemm...");
     nErr = calculator_gemm(handle,
-                           dsp_matrix1, m * k,
-                           dsp_matrix2, k * n,
-                           dsp_output, m * n,
-                           m, k, n);
+							dsp_matrix1, m * k,
+							dsp_matrix2, k * n,
+							dsp_output, m * n,
+							m, k, n,
+							transX, transY);
                            
     if (nErr != 0) {
         __android_log_print(ANDROID_LOG_ERROR, TAG, "GEMM Error: calculator_gemm call failed, returned 0x%x", nErr);

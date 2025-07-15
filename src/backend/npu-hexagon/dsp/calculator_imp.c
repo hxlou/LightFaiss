@@ -371,6 +371,56 @@ static inline void matmul_ikj_hvx(float *restrict input_matrix1,
 	return;
 }
 
+static inline void matmul_transposed_b_hvx(float *restrict a_matrix,
+                                           float *restrict b_transposed_matrix,
+                                           float *restrict output_matrix,
+                                           uint32_t m,
+                                           uint32_t k,
+                                           uint32_t n) {
+    const int VEC_LEN = 32; 
+
+    for (int i = 0; i < m; ++i) {
+        if (i + 1 < m) {
+            float *next_a_row = a_matrix + (i + 1) * k;
+            for (int l = 0; l < k; l += 16) {
+                Q6_dcfetch_A(next_a_row + l);
+            }
+        }
+
+        for (int j = 0; j < n; ++j) {
+            // 计算 C(i, j) = dot_product(A[i, :], B_T[j, :])
+
+            HVX_Vector acc_vec = Q6_V_vzero();
+            
+            float *a_row_ptr = a_matrix + i * k;
+            float *bt_row_ptr = b_transposed_matrix + j * k;
+
+            int l = 0;
+            for (; l + (VEC_LEN - 1) < k; l += VEC_LEN) {
+                HVX_Vector vec_a = *(HVX_Vector *)(a_row_ptr + l);
+                HVX_Vector vec_bt = *(HVX_Vector *)(bt_row_ptr + l);
+
+                HVX_Vector mul_res = Q6_Vqf32_vmpy_Vqf32Vqf32(vec_a, vec_bt);
+                acc_vec = Q6_Vqf32_vadd_Vqf32Vqf32(acc_vec, mul_res);
+            }
+
+            float temp_sum[VEC_LEN] __attribute__((aligned(128)));
+            *(HVX_Vector *)temp_sum = acc_vec;
+
+            float dot_product = 0.0f;
+            for (int s = 0; s < VEC_LEN; ++s) {
+                dot_product += temp_sum[s];
+            }
+
+            for (; l < k; ++l) {
+                dot_product += a_row_ptr[l] * bt_row_ptr[l];
+            }
+
+            output_matrix[i * n + j] = dot_product;
+        }
+    }
+}
+
 static inline void matmul_ikj_hvx_one_block(float *restrict input_matrix1,
                  float *restrict input_matrix2,
                  float *restrict output,
@@ -643,22 +693,32 @@ int calculator_gemm(remote_handle64 h,
 					int outputLen,
 					uint32_t m, 
 					uint32_t k, 
-					uint32_t n) {
-    if (m == 0 || k == 0 || n == 0) {
-        return 0; 
-    }
-    if (input_matrix1Len < m * k) {
-        return AEE_EBADPARM;
-    }
-    if (input_matrix2Len < k * n) {
-        return AEE_EBADPARM;
-    }
+					uint32_t n,
+					boolean transX,
+					boolean transY) {
+	if (m == 0 || k == 0 || n == 0) {
+		return 0; 
+	}
+	if (input_matrix1Len < m * k) {
+		return AEE_EBADPARM;
+	}
+	if (input_matrix2Len < k * n) {
+		return AEE_EBADPARM;
+	}
 
-    if (outputLen < m * n) {
-        return AEE_EBADPARM;
-    }
+	if (outputLen < m * n) {
+		return AEE_EBADPARM;
+	}
 
-    matmul_ikj_hvx((float*)input_matrix1, (float*)input_matrix2, output, m, k, n);
+	if (transY) {
+		matmul_transposed_b_hvx((float*)input_matrix1, 
+								(float*)input_matrix2, 
+								output, m, k, n);
+	} else {
+		matmul_ikj_hvx((float*)input_matrix1,
+						(float*)input_matrix2,
+						output, m, k, n);
+	}
 
 	return 0;
 }

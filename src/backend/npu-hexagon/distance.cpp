@@ -91,7 +91,8 @@ void calL2Hexagon(
                 nxi,
                 di,
                 nyi,
-                ip_block.get()
+                ip_block.get(),
+				false, true  // 转置参数
             );
 
             // 最终处理
@@ -174,7 +175,8 @@ void calIPHexagon(
                 nxi,
                 di,
                 nyi,
-                ip_block.get()
+                ip_block.get(),
+				false, true  // 转置参数
             );
             for (int64_t i = i0; i < i1; ++i) {
                 float* ip_line = ip_block.get() + (i - i0) * (j1 - j0);

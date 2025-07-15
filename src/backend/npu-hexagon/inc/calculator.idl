@@ -19,6 +19,8 @@ interface calculator : remote_handle64{
 		rout sequence<float> output,
 		in uint32 m,
 		in uint32 k,
-		in uint32 n
+		in uint32 n,
+		in boolean transX,
+		in boolean transY
 	);
 };
