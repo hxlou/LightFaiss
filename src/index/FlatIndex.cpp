@@ -8,6 +8,16 @@
 AAssetManager* FlatIndex::assetManager_ = nullptr;
 std::mutex FlatIndex::assetManagerMutex_;
 
+kp::Manager AllMgr;
+
+#include <android/log.h>
+
+#define LOG_TAG "EdgeVecDB_Native_Debug"
+
+#define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
+#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
+#define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
+
 #include <vector>
 #include <thread>
 #include <filesystem>
@@ -97,7 +107,7 @@ void FlatIndex::query(
     }
     else if (device == DeviceType::GPU_KOMPUTE) {
         gpu_kompute::query(
-            mgr_,
+            &AllMgr,
             nQuery,
             end - start,
             k,
@@ -171,14 +181,13 @@ void FlatIndex::search(
     
     // 任务分配（TODO 任务关键，需要结合硬件负载来进行）
     uint64_t cpu_start  = 0;
-    uint64_t cpu_end    = num_ / 2;            // [start_cpu, end_cpu)
-    uint64_t gpu_start  = UINT64_MAX;
-    uint64_t gpu_end    = UINT64_MAX;        // [start_gpu, end_gpu)
-    uint64_t npu_start  = num_ / 2;
-    uint64_t npu_end    = num_ ;               // [start_npu, end_npu)
+    uint64_t cpu_end    = num_ / 3;            // [start_cpu, end_cpu)
+    uint64_t gpu_start  = num_ / 3;
+    uint64_t gpu_end    = 2 * num_ / 3;        // [start_gpu, end_gpu)
+    uint64_t npu_start  = 2 * num_ / 3;
+    uint64_t npu_end    = num_;                // [start_npu, end_npu)
 
-	__android_log_print(ANDROID_LOG_DEBUG, "FlatIndex",
-		"cpu_start=%llu, cpu_end=%llu, gpu_start=%llu, gpu_end=%llu, npu_start=%llu, npu_end=%llu",
+	LOGD("cpu_start=%llu, cpu_end=%llu, gpu_start=%llu, gpu_end=%llu, npu_start=%llu, npu_end=%llu",
 		(unsigned long long)cpu_start,
 		(unsigned long long)cpu_end,
 		(unsigned long long)gpu_start,
@@ -192,7 +201,7 @@ void FlatIndex::search(
     std::thread npu_thread;
 
     // 现有的默认分配：CPU和GPU各分配一半，NPU不分配
-    if (cpu_start != UINT64_MAX) {
+    if (cpu_start != UINT64_MAX && cpu_end > cpu_start) {
         cpu_thread = std::thread(
             [&](){
                 this->query(k, cpu_start, cpu_end, DeviceType::CPU_BLAS, nQuery, query, resultsTmpCPU.data(), distancesTmpCPU.data());
@@ -200,7 +209,7 @@ void FlatIndex::search(
         );
     }
 
-    if (gpu_start != UINT64_MAX) {
+    if (gpu_start != UINT64_MAX && gpu_end > gpu_start) {
         gpu_thread = std::thread(
             [&](){
                 this->query(k, gpu_start, gpu_end, DeviceType::GPU_KOMPUTE, nQuery, query, resultsTmpGPU.data(), distancesTmpGPU.data());
@@ -208,7 +217,7 @@ void FlatIndex::search(
         );
     }
 
-    if (npu_start != UINT64_MAX) {
+    if (npu_start != UINT64_MAX && npu_end > npu_start) {
         npu_thread = std::thread(
             [&](){
                 this->query(k, npu_start, npu_end, DeviceType::NPU_HEXAGON, nQuery, query, resultsTmpNPU.data(), distancesTmpNPU.data());
@@ -216,13 +225,13 @@ void FlatIndex::search(
         );
     }
     
-    if (cpu_start != UINT64_MAX) {
+    if (cpu_start != UINT64_MAX && cpu_end > cpu_start) {
         cpu_thread.join();
     }
-    if (gpu_start != UINT64_MAX) {
+    if (gpu_start != UINT64_MAX && gpu_end > gpu_start) {
         gpu_thread.join();
     }
-    if (npu_start != UINT64_MAX) {
+    if (npu_start != UINT64_MAX && npu_end > npu_start) {
         npu_thread.join();
     }
 
