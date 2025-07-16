@@ -169,7 +169,7 @@ void calL2Hexagon(
             float one = 1, zero = 0;
             FINTEGER nyi = j1 - j0, nxi = i1 - i0, di = dim;
             // 开始替换
-            calculator_gemm_with_check_cpp(
+            calculator_gemm_cpp(
                 x + i0 * dim,  // x的起始地址
                 y + j0 * dim,  // y的起始地址
                 nxi,
@@ -253,7 +253,7 @@ void calIPHexagon(
             // 计算内积
             float one = 1, zero = 0;
             FINTEGER nyi = j1 - j0, nxi = i1 - i0, di = dim;
-            calculator_gemm_with_check_cpp(
+            calculator_gemm_cpp(
                 x + i0 * dim,  // x的起始地址
                 y + j0 * dim,  // y的起始地址
                 nxi,

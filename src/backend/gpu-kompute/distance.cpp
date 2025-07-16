@@ -159,28 +159,28 @@ void matmul (
 	const auto& yData = y->data();
 
     // 输出完整的矩阵A
-    __android_log_print(ANDROID_LOG_DEBUG, "MATMUL", "=== Matrix A (%zu x %zu) ===", m, k);
-    for (size_t i = 0; i < m; ++i) {
-        std::stringstream ss;
-        ss << "Row " << i << ": ";
-        for (size_t j = 0; j < k; ++j) {
-            size_t idx = transX ? (j * m + i) : (i * k + j);
-            ss << xData[idx] << " ";
-        }
-        __android_log_print(ANDROID_LOG_DEBUG, "MATMUL", "%s", ss.str().c_str());
-    }
+    // __android_log_print(ANDROID_LOG_DEBUG, "MATMUL", "=== Matrix A (%zu x %zu) ===", m, k);
+    // for (size_t i = 0; i < m; ++i) {
+    //     std::stringstream ss;
+    //     ss << "Row " << i << ": ";
+    //     for (size_t j = 0; j < k; ++j) {
+    //         size_t idx = transX ? (j * m + i) : (i * k + j);
+    //         ss << xData[idx] << " ";
+    //     }
+    //     __android_log_print(ANDROID_LOG_DEBUG, "MATMUL", "%s", ss.str().c_str());
+    // }
     
     // 输出完整的矩阵B
-    __android_log_print(ANDROID_LOG_DEBUG, "MATMUL", "=== Matrix B (%zu x %zu) ===", k, n);
-    for (size_t i = 0; i < k; ++i) {
-        std::stringstream ss;
-        ss << "Row " << i << ": ";
-        for (size_t j = 0; j < n; ++j) {
-            size_t idx = transY ? (j * k + i) : (i * n + j);
-            ss << yData[idx] << " ";
-        }
-        __android_log_print(ANDROID_LOG_DEBUG, "MATMUL", "%s", ss.str().c_str());
-    }
+    // __android_log_print(ANDROID_LOG_DEBUG, "MATMUL", "=== Matrix B (%zu x %zu) ===", k, n);
+    // for (size_t i = 0; i < k; ++i) {
+    //     std::stringstream ss;
+    //     ss << "Row " << i << ": ";
+    //     for (size_t j = 0; j < n; ++j) {
+    //         size_t idx = transY ? (j * k + i) : (i * n + j);
+    //         ss << yData[idx] << " ";
+    //     }
+    //     __android_log_print(ANDROID_LOG_DEBUG, "MATMUL", "%s", ss.str().c_str());
+    // }
 
     uint32_t* shaderPtr = reinterpret_cast<uint32_t*>(gpu_kompute::matmul_o2_comp_spv);
     std::vector<uint32_t> shader(shaderPtr, shaderPtr + gpu_kompute::matmul_o2_comp_spv_len / sizeof(uint32_t));
@@ -220,87 +220,87 @@ void matmul (
     seq->eval();
     
     // 输出完整的结果矩阵
-    const auto& outData = out->data();
-    __android_log_print(ANDROID_LOG_DEBUG, "MATMUL", "=== Result Matrix (%zu x %zu) ===", m, n);
-    for (size_t i = 0; i < m; ++i) {
-        std::stringstream ss;
-        ss << "Row " << i << ": ";
-        for (size_t j = 0; j < n; ++j) {
-            size_t idx = i * n + j;
-            ss << outData[idx] << " ";
-        }
-        __android_log_print(ANDROID_LOG_DEBUG, "MATMUL", "%s", ss.str().c_str());
-    }
+    // const auto& outData = out->data();
+    // __android_log_print(ANDROID_LOG_DEBUG, "MATMUL", "=== Result Matrix (%zu x %zu) ===", m, n);
+    // for (size_t i = 0; i < m; ++i) {
+    //     std::stringstream ss;
+    //     ss << "Row " << i << ": ";
+    //     for (size_t j = 0; j < n; ++j) {
+    //         size_t idx = i * n + j;
+    //         ss << outData[idx] << " ";
+    //     }
+    //     __android_log_print(ANDROID_LOG_DEBUG, "MATMUL", "%s", ss.str().c_str());
+    // }
     
     // 输出结果矩阵的统计信息
-    size_t totalElements = m * n;
-    if (totalElements > 0) {
-        // 直接使用outData作为指针
-        const float* dataPtr = &outData[0];
-        float minVal = *std::min_element(dataPtr, dataPtr + totalElements);
-        float maxVal = *std::max_element(dataPtr, dataPtr + totalElements);
-        float sum = std::accumulate(dataPtr, dataPtr + totalElements, 0.0f);
-        float mean = sum / totalElements;
+    // size_t totalElements = m * n;
+    // if (totalElements > 0) {
+    //     // 直接使用outData作为指针
+    //     const float* dataPtr = &outData[0];
+    //     float minVal = *std::min_element(dataPtr, dataPtr + totalElements);
+    //     float maxVal = *std::max_element(dataPtr, dataPtr + totalElements);
+    //     float sum = std::accumulate(dataPtr, dataPtr + totalElements, 0.0f);
+    //     float mean = sum / totalElements;
         
-        __android_log_print(ANDROID_LOG_DEBUG, "MATMUL", "Result stats - Min: %f, Max: %f, Mean: %f, Total elements: %zu", 
-                           minVal, maxVal, mean, totalElements);
-    }
+    //     __android_log_print(ANDROID_LOG_DEBUG, "MATMUL", "Result stats - Min: %f, Max: %f, Mean: %f, Total elements: %zu", 
+    //                        minVal, maxVal, mean, totalElements);
+    // }
 	    
-    // 添加朴素的C++矩阵乘法验证
-    std::vector<float> cpuResult(m * n, 0.0f);
+    // // 添加朴素的C++矩阵乘法验证
+    // std::vector<float> cpuResult(m * n, 0.0f);
     
-    // CPU朴素矩阵乘法计算
-    for (size_t i = 0; i < m; ++i) {
-        for (size_t j = 0; j < n; ++j) {
-            float sum = 0.0f;
-            for (size_t l = 0; l < k; ++l) {
-                // 考虑转置情况
-                size_t xIdx = transX ? (l * m + i) : (i * k + l);
-                size_t yIdx = transY ? (j * k + l) : (l * n + j);
-                sum += xData[xIdx] * yData[yIdx];
-            }
-            cpuResult[i * n + j] = sum;
-        }
-    }
+    // // CPU朴素矩阵乘法计算
+    // for (size_t i = 0; i < m; ++i) {
+    //     for (size_t j = 0; j < n; ++j) {
+    //         float sum = 0.0f;
+    //         for (size_t l = 0; l < k; ++l) {
+    //             // 考虑转置情况
+    //             size_t xIdx = transX ? (l * m + i) : (i * k + l);
+    //             size_t yIdx = transY ? (j * k + l) : (l * n + j);
+    //             sum += xData[xIdx] * yData[yIdx];
+    //         }
+    //         cpuResult[i * n + j] = sum;
+    //     }
+    // }
     
-    // 输出CPU计算结果矩阵
-    __android_log_print(ANDROID_LOG_DEBUG, "MATMUL", "=== CPU Reference Result Matrix (%zu x %zu) ===", m, n);
-    for (size_t i = 0; i < m; ++i) {
-        std::stringstream ss;
-        ss << "Row " << i << ": ";
-        for (size_t j = 0; j < n; ++j) {
-            size_t idx = i * n + j;
-            ss << cpuResult[idx] << " ";
-        }
-        __android_log_print(ANDROID_LOG_DEBUG, "MATMUL", "%s", ss.str().c_str());
-    }
+    // // 输出CPU计算结果矩阵
+    // __android_log_print(ANDROID_LOG_DEBUG, "MATMUL", "=== CPU Reference Result Matrix (%zu x %zu) ===", m, n);
+    // for (size_t i = 0; i < m; ++i) {
+    //     std::stringstream ss;
+    //     ss << "Row " << i << ": ";
+    //     for (size_t j = 0; j < n; ++j) {
+    //         size_t idx = i * n + j;
+    //         ss << cpuResult[idx] << " ";
+    //     }
+    //     __android_log_print(ANDROID_LOG_DEBUG, "MATMUL", "%s", ss.str().c_str());
+    // }
     
-    // 比较GPU和CPU结果的差异
-    float maxDiff = 0.0f;
-    float totalDiff = 0.0f;
-    size_t diffCount = 0;
+    // // 比较GPU和CPU结果的差异
+    // float maxDiff = 0.0f;
+    // float totalDiff = 0.0f;
+    // size_t diffCount = 0;
     
-    for (size_t i = 0; i < totalElements; ++i) {
-        float diff = std::abs(outData[i] - cpuResult[i]);
-        if (diff > 1e-5f) {  // 设置一个小的阈值
-            diffCount++;
-        }
-        maxDiff = std::max(maxDiff, diff);
-        totalDiff += diff;
-    }
+    // for (size_t i = 0; i < totalElements; ++i) {
+    //     float diff = std::abs(outData[i] - cpuResult[i]);
+    //     if (diff > 1e-5f) {  // 设置一个小的阈值
+    //         diffCount++;
+    //     }
+    //     maxDiff = std::max(maxDiff, diff);
+    //     totalDiff += diff;
+    // }
     
-    float avgDiff = totalElements > 0 ? totalDiff / totalElements : 0.0f;
+    // float avgDiff = totalElements > 0 ? totalDiff / totalElements : 0.0f;
     
-    __android_log_print(ANDROID_LOG_DEBUG, "MATMUL", "=== GPU vs CPU Comparison ===");
-    __android_log_print(ANDROID_LOG_DEBUG, "MATMUL", "Max difference: %f", maxDiff);
-    __android_log_print(ANDROID_LOG_DEBUG, "MATMUL", "Average difference: %f", avgDiff);
-    __android_log_print(ANDROID_LOG_DEBUG, "MATMUL", "Elements with significant difference (>1e-5): %zu/%zu", diffCount, totalElements);
+    // __android_log_print(ANDROID_LOG_DEBUG, "MATMUL", "=== GPU vs CPU Comparison ===");
+    // __android_log_print(ANDROID_LOG_DEBUG, "MATMUL", "Max difference: %f", maxDiff);
+    // __android_log_print(ANDROID_LOG_DEBUG, "MATMUL", "Average difference: %f", avgDiff);
+    // __android_log_print(ANDROID_LOG_DEBUG, "MATMUL", "Elements with significant difference (>1e-5): %zu/%zu", diffCount, totalElements);
     
-    if (maxDiff < 1e-4f) {
-        __android_log_print(ANDROID_LOG_DEBUG, "MATMUL", "✓ GPU and CPU results match within tolerance");
-    } else {
-        __android_log_print(ANDROID_LOG_DEBUG, "MATMUL", "⚠ GPU and CPU results differ significantly!");
-    }
+    // if (maxDiff < 1e-4f) {
+    //     __android_log_print(ANDROID_LOG_DEBUG, "MATMUL", "✓ GPU and CPU results match within tolerance");
+    // } else {
+    //     __android_log_print(ANDROID_LOG_DEBUG, "MATMUL", "⚠ GPU and CPU results differ significantly!");
+    // }
 }
 
 void vecsNorm (
