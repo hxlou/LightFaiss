@@ -299,7 +299,7 @@ static inline void multithread_matmul(float *restrict input_matrix1,
 // 256*256（有sum中间变量），1223 ms
 // 512*512（无sum中间变量），12904 ms
 // 512*512（有sum中间变量），9331 ms
-static inline void matmul(float *restrict input_matrix1,
+static inline void matmul_ijk(float *restrict input_matrix1,
                  float *restrict input_matrix2,
                  float *restrict output,
                  uint32_t m,
@@ -336,10 +336,24 @@ static inline void matmul_ikj(float *restrict input_matrix1,
 	return;
 }
 
-// 256*256 矩阵乘法, 39ms
-// 512*512 矩阵乘法, 254ms（VTCM off）
-// 512*512 矩阵乘法, 309ms（VTCM on）
-// 1024*1024 矩阵乘法, 2817ms（VTCM off）
+static inline void matmul_ikj_transposed_b(float *restrict input_matrix1,
+                                     float *restrict input_matrix2,
+                                     float *restrict output,
+                                     uint32_t m,
+                                     uint32_t k,
+                                     uint32_t n) {
+	for (int i = 0; i < m; i++) {
+		for (int j = 0; j < n; j++) {
+			float sum = 0.0f;
+			for (int l = 0; l < k; l++) {
+				sum += input_matrix1[i * k + l] * input_matrix2[j * k + l];
+			}
+			output[i * n + j] = sum;
+		}
+	}
+	return;
+}
+
 static inline void matmul_ikj_hvx(float *restrict input_matrix1,
                  float *restrict input_matrix2,
                  float *restrict output,
@@ -371,54 +385,62 @@ static inline void matmul_ikj_hvx(float *restrict input_matrix1,
 	return;
 }
 
-static inline void matmul_transposed_b_hvx(float *restrict a_matrix,
-                                           float *restrict b_transposed_matrix,
-                                           float *restrict output_matrix,
-                                           uint32_t m,
-                                           uint32_t k,
-                                           uint32_t n) {
-    const int VEC_LEN = 32; 
-
-    for (int i = 0; i < m; ++i) {
-        if (i + 1 < m) {
-            float *next_a_row = a_matrix + (i + 1) * k;
-            for (int l = 0; l < k; l += 16) {
-                Q6_dcfetch_A(next_a_row + l);
-            }
+#define HVX_VECTOR_WIDTH_FLOATS 32
+static inline void matmul_ijk_hvx_transposed_b(float *restrict input_matrix1,
+                                         float *restrict input_matrix2,
+                                         float *restrict output,
+                                         uint32_t m,
+                                         uint32_t k,
+                                         uint32_t n) {
+    if (k == 0) {
+        for(int i = 0; i < m * n; ++i) {
+            output[i] = 0.0f;
         }
-
-        for (int j = 0; j < n; ++j) {
-            // 计算 C(i, j) = dot_product(A[i, :], B_T[j, :])
-
-            HVX_Vector acc_vec = Q6_V_vzero();
-            
-            float *a_row_ptr = a_matrix + i * k;
-            float *bt_row_ptr = b_transposed_matrix + j * k;
-
-            int l = 0;
-            for (; l + (VEC_LEN - 1) < k; l += VEC_LEN) {
-                HVX_Vector vec_a = *(HVX_Vector *)(a_row_ptr + l);
-                HVX_Vector vec_bt = *(HVX_Vector *)(bt_row_ptr + l);
-
-                HVX_Vector mul_res = Q6_Vqf32_vmpy_Vqf32Vqf32(vec_a, vec_bt);
-                acc_vec = Q6_Vqf32_vadd_Vqf32Vqf32(acc_vec, mul_res);
-            }
-
-            float temp_sum[VEC_LEN] __attribute__((aligned(128)));
-            *(HVX_Vector *)temp_sum = acc_vec;
-
-            float dot_product = 0.0f;
-            for (int s = 0; s < VEC_LEN; ++s) {
-                dot_product += temp_sum[s];
-            }
-
-            for (; l < k; ++l) {
-                dot_product += a_row_ptr[l] * bt_row_ptr[l];
-            }
-
-            output_matrix[i * n + j] = dot_product;
-        }
+        return;
     }
+
+	for (int i = 0; i < m; i++) {
+		for (int j = 0; j < n; j++) {
+            float sum_vectorized = 0.0f;
+			float *ptrA = input_matrix1 + i * k;
+			float *ptrB = input_matrix2 + j * k;
+			int l = 0;
+
+			if (k >= HVX_VECTOR_WIDTH_FLOATS) {
+				HVX_Vector vSum = Q6_V_vzero();
+				for (; l + (HVX_VECTOR_WIDTH_FLOATS - 1) < k; l += HVX_VECTOR_WIDTH_FLOATS) {
+					
+					// 128字节对齐
+					HVX_Vector vA, vB;
+					memcpy(&vA, ptrA + l, sizeof(HVX_Vector));
+					memcpy(&vB, ptrB + l, sizeof(HVX_Vector));
+
+					if (j + 1 < n) {
+						Q6_dcfetch_A(input_matrix2 + (j + 1) * k + l);
+					}
+
+					vSum = Q6_Vqf32_vadd_Vqf32Vqf32(vSum, Q6_Vqf32_vmpy_VsfVsf(vA, vB));
+				}
+
+				vSum = Q6_Vqf32_vadd_Vqf32Vqf32(vSum, Q6_V_vror_VR(vSum, 16 * sizeof(float)));
+				vSum = Q6_Vqf32_vadd_Vqf32Vqf32(vSum, Q6_V_vror_VR(vSum, 8 * sizeof(float)));
+				vSum = Q6_Vqf32_vadd_Vqf32Vqf32(vSum, Q6_V_vror_VR(vSum, 4 * sizeof(float)));
+				vSum = Q6_Vqf32_vadd_Vqf32Vqf32(vSum, Q6_V_vror_VR(vSum, 2 * sizeof(float)));
+				vSum = Q6_Vqf32_vadd_Vqf32Vqf32(vSum, Q6_V_vror_VR(vSum, 1 * sizeof(float)));
+
+				HVX_Vector vFinalSum_sf = Q6_Vsf_equals_Vqf32(vSum);
+				sum_vectorized = ((float *)&vFinalSum_sf)[0];
+			}
+
+            float sum_scalar = 0.0f;
+			for (; l < k; l++) {
+				sum_scalar += ptrA[l] * ptrB[l];
+			}
+
+			output[i * n + j] = sum_vectorized + sum_scalar;
+		}
+	}
+	return;
 }
 
 static inline void matmul_ikj_hvx_one_block(float *restrict input_matrix1,
@@ -711,7 +733,7 @@ int calculator_gemm(remote_handle64 h,
 	}
 
 	if (transY) {
-		matmul_transposed_b_hvx((float*)input_matrix1, 
+		matmul_ijk_hvx_transposed_b((float*)input_matrix1, 
 								(float*)input_matrix2, 
 								output, m, k, n);
 	} else {

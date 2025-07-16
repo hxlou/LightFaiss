@@ -8,9 +8,12 @@
 #include <utility>         // std::pair
 #include <algorithm>       // std::min
 #include <iostream>        // std::cout, std::endl
+#include <string>
 #include "backend/npu-hexagon/calculator-api.h"
 #include <android/log.h>
 #define LOG_TAG "MATMUL"
+#define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
+
 
 #ifndef FINTEGER
 #define FINTEGER long
@@ -66,15 +69,26 @@ void calculator_gemm_with_check_cpp(
     float* C,
     bool transA, bool transB)
 {
-    calculator_gemm_cpp(A, B, M, K, N, C, transA, transB);
+	memset(C, 0, sizeof(float) * M * N);
 
     std::vector<float> C_cpu(M * N, 0.0f);
     cpu_gemm_naive(A, B, M, K, N, C_cpu.data(), transA, transB);
 
-    __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, "=== Result Matrix (%zu x %zu) ===", M, N);
-    for (size_t i = 0; i < std::min(M, size_t(10)); ++i) {
+	__android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, "=== CPU Reference Result Matrix (%zu x %zu) ===", M, N);
+    for (size_t i = 0; i < M; ++i) {
         std::string row = "Row " + std::to_string(i) + ":";
-        for (size_t j = 0; j < std::min(N, size_t(100)); ++j) {
+        for (size_t j = 0; j < N; ++j) {
+            row += " " + std::to_string(C_cpu[i * N + j]);
+        }
+        __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, "%s", row.c_str());
+    }
+
+    calculator_gemm_cpp(A, B, M, K, N, C, transA, transB);
+
+    __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, "=== NPU Result Matrix (%zu x %zu) ===", M, N);
+    for (size_t i = 0; i < M; ++i) {
+        std::string row = "Row " + std::to_string(i) + ":";
+        for (size_t j = 0; j < N; ++j) {
             row += " " + std::to_string(C[i * N + j]);
         }
         __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, "%s", row.c_str());
@@ -87,15 +101,6 @@ void calculator_gemm_with_check_cpp(
         sum += C[i];
     }
     __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, "Result stats - Min: %.6f, Max: %.6f, Mean: %.6f, Total elements: %zu", min_val, max_val, sum / (M * N), M * N);
-
-    __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, "=== CPU Reference Result Matrix (%zu x %zu) ===", M, N);
-    for (size_t i = 0; i < std::min(M, size_t(10)); ++i) {
-        std::string row = "Row " + std::to_string(i) + ":";
-        for (size_t j = 0; j < std::min(N, size_t(100)); ++j) {
-            row += " " + std::to_string(C_cpu[i * N + j]);
-        }
-        __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, "%s", row.c_str());
-    }
 
     __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, "=== NPU vs CPU Comparison ===");
     float max_diff = 0.0f, sum_diff = 0.0f;

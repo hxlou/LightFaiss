@@ -98,6 +98,7 @@ int calculator_gemm_cpp(const float* matrix1,
 						float* output_matrix,
 						bool transX, bool transY) {
     const char* dsp_path = "/data/local/tmp";
+	__android_log_print(ANDROID_LOG_DEBUG, TAG, "初始化 DSP 环境");
     if (calculator_init(dsp_path) != 0) {
         __android_log_print(ANDROID_LOG_ERROR, TAG, "初始化失败");
         return -1;

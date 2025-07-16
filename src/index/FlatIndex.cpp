@@ -3,6 +3,7 @@
 #include "backend/gpu-kompute/distance.hpp"
 #include "backend/npu-hexagon/distance.hpp"
 
+#include <android/log.h>
 
 AAssetManager* FlatIndex::assetManager_ = nullptr;
 std::mutex FlatIndex::assetManagerMutex_;
@@ -137,7 +138,7 @@ void FlatIndex::search(
     // 在这一层进行调度
     // 如果nQ * nY > 10000，则使用GPU，否则使用CPU
     uint64_t nData = num_;
-    uint64_t threshold = 10000;
+    uint64_t threshold = 0;
 
     if (nQuery * nData <= threshold) {
         // 计算量小的情况下，直接调用CPU完成计算并返回结果
@@ -170,11 +171,21 @@ void FlatIndex::search(
     
     // 任务分配（TODO 任务关键，需要结合硬件负载来进行）
     uint64_t cpu_start  = 0;
-    uint64_t cpu_end    = num_ / 3;            // [start_cpu, end_cpu)
-    uint64_t gpu_start  = num_ / 3;
-    uint64_t gpu_end    = 2 * num_ / 3;        // [start_gpu, end_gpu)
-    uint64_t npu_start  = 2 * num_ / 3;
+    uint64_t cpu_end    = num_ / 2;            // [start_cpu, end_cpu)
+    uint64_t gpu_start  = UINT64_MAX;
+    uint64_t gpu_end    = UINT64_MAX;        // [start_gpu, end_gpu)
+    uint64_t npu_start  = num_ / 2;
     uint64_t npu_end    = num_ ;               // [start_npu, end_npu)
+
+	__android_log_print(ANDROID_LOG_DEBUG, "FlatIndex",
+		"cpu_start=%llu, cpu_end=%llu, gpu_start=%llu, gpu_end=%llu, npu_start=%llu, npu_end=%llu",
+		(unsigned long long)cpu_start,
+		(unsigned long long)cpu_end,
+		(unsigned long long)gpu_start,
+		(unsigned long long)gpu_end,
+		(unsigned long long)npu_start,
+		(unsigned long long)npu_end
+	);
 
     std::thread cpu_thread;
     std::thread gpu_thread;
