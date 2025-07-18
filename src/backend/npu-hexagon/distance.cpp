@@ -9,6 +9,7 @@
 #include <algorithm>       // std::min
 #include <iostream>        // std::cout, std::endl
 #include <string>
+#include <ctime>
 #include "backend/npu-hexagon/calculator-api.h"
 #include <android/log.h>
 #define LOG_TAG "MATMUL"
@@ -34,6 +35,10 @@ void query(
     MetricType metricType,
     float* metricArg
 ) {
+    struct timespec ts_start, ts_end;
+    clock_gettime(CLOCK_MONOTONIC, &ts_start);
+
+
     if (nQuery == 0 || k == 0 || dim == 0 || nData == 0)
         return;
     // 选择合适的计算内积的函数
@@ -42,6 +47,16 @@ void query(
     } else {
         npu_hexagon::calL2Hexagon(query, data, nQuery, nData, dim, k, distances, results, dataNorm);
     }
+           // 记录结束时间
+    clock_gettime(CLOCK_MONOTONIC, &ts_end);
+
+    // 计算耗时（单位：毫秒）
+    double elapsed = (ts_end.tv_sec - ts_start.tv_sec) * 1000.0 +
+                     (ts_end.tv_nsec - ts_start.tv_nsec) / 1000000.0;
+
+    // 输出到安卓日志
+    __android_log_print(ANDROID_LOG_INFO, "npu_hexagon", "query耗时: %.3f ms", elapsed);
+
 }
 
 void cpu_gemm_naive(

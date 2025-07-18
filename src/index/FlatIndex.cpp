@@ -178,14 +178,37 @@ void FlatIndex::search(
     std::vector<float> distancesTmpCPU(nQuery * k, 0.0f);
     std::vector<float> distancesTmpGPU(nQuery * k, 0.0f);
     std::vector<float> distancesTmpNPU(nQuery * k, 0.0f);
+
+	uint64_t cpu_start;
+    uint64_t cpu_end;
+    uint64_t gpu_start;
+    uint64_t gpu_end;
+    uint64_t npu_start;
+    uint64_t npu_end;
     
-    // 任务分配（TODO 任务关键，需要结合硬件负载来进行）
-    uint64_t cpu_start  = 0;
-    uint64_t cpu_end    = num_ / 3;            // [start_cpu, end_cpu)
-    uint64_t gpu_start  = num_ / 3;
-    uint64_t gpu_end    = 2 * num_ / 3;        // [start_gpu, end_gpu)
-    uint64_t npu_start  = 2 * num_ / 3;
-    uint64_t npu_end    = num_;                // [start_npu, end_npu)
+    // 根据硬件甜点进行任务分配
+	if (nQuery * nData <= 150000000) {
+		cpu_start  = 0;
+		cpu_end    = 7 * num_ / 10;           // [start_cpu, end_cpu)
+		gpu_start  = 7 * num_ / 10;
+		gpu_end    = 9 * num_ / 10;           // [start_gpu, end_gpu)
+		npu_start  = 9 * num_ / 10;
+		npu_end    = num_;                    // [start_npu, end_npu)
+	} else if (nQuery * nData <= 350000000) { 
+		cpu_start  = 0;
+		cpu_end    = 3 * num_ / 10;           // [start_cpu, end_cpu)
+		gpu_start  = 3 * num_ / 10;
+		gpu_end    = 9 * num_ / 10;           // [start_gpu, end_gpu)
+		npu_start  = 9 * num_ / 10;
+		npu_end    = num_;                    // [start_npu, end_npu)
+	} else {
+		cpu_start  = 0;
+		cpu_end    = 1.5  * num_ / 10;        // [start_cpu, end_cpu)
+		gpu_start  = 1.5  * num_ / 10;
+		gpu_end    = 9 * num_ / 10;           // [start_gpu, end_gpu)
+		npu_start  = 9 * num_ / 10;
+		npu_end    = num_;                    // [start_npu, end_npu)
+	}
 
 	LOGD("cpu_start=%llu, cpu_end=%llu, gpu_start=%llu, gpu_end=%llu, npu_start=%llu, npu_end=%llu",
 		(unsigned long long)cpu_start,
@@ -200,19 +223,19 @@ void FlatIndex::search(
     std::thread gpu_thread;
     std::thread npu_thread;
 
+    if (gpu_start != UINT64_MAX && gpu_end > gpu_start) {
+        gpu_thread = std::thread(
+            [&](){
+                this->query(k, gpu_start, gpu_end, DeviceType::GPU_KOMPUTE, nQuery, query, resultsTmpGPU.data(), distancesTmpGPU.data());
+            }
+        );
+    }
+
     // 现有的默认分配：CPU和GPU各分配一半，NPU不分配
     if (cpu_start != UINT64_MAX && cpu_end > cpu_start) {
         cpu_thread = std::thread(
             [&](){
                 this->query(k, cpu_start, cpu_end, DeviceType::CPU_BLAS, nQuery, query, resultsTmpCPU.data(), distancesTmpCPU.data());
-            }
-        );
-    }
-
-    if (gpu_start != UINT64_MAX && gpu_end > gpu_start) {
-        gpu_thread = std::thread(
-            [&](){
-                this->query(k, gpu_start, gpu_end, DeviceType::GPU_KOMPUTE, nQuery, query, resultsTmpGPU.data(), distancesTmpGPU.data());
             }
         );
     }
