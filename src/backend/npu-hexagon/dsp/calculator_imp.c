@@ -234,7 +234,7 @@ static void process_walker(void *thread_args) {
 	}
 }
 
-#define STACK_SIZE 1024*4
+#define STACK_SIZE 1024 * 8
 
 static inline void multithread_matmul(float *restrict input_matrix1,
                  float *restrict input_matrix2,
@@ -441,6 +441,188 @@ static inline void matmul_ijk_hvx_transposed_b(float *restrict input_matrix1,
 		}
 	}
 	return;
+}
+
+
+#define HVX_VECTOR_WIDTH_FLOATS 32
+
+#define NUM_THREADS 6
+
+/**
+ * @brief 用于向工作线程传递参数的结构体
+ */
+typedef struct {
+    float *restrict input_matrix1;
+    float *restrict input_matrix2;
+    float *restrict output;
+    uint32_t m;
+    uint32_t k;
+    uint32_t n;
+
+    // 线程任务范围
+    int start_row; // 起始行 (包含)
+    int end_row;   // 结束行 (不包含)
+
+    // 调试信息
+    int thread_id;
+} matmul_thread_data_t;
+
+
+/**
+ * @brief 单个线程执行的计算任务
+ * 原始函数的修改版，只计算 [start_row, end_row) 区间的行
+ */
+static void matmul_worker_task(float *restrict input_matrix1,
+                               float *restrict input_matrix2,
+                               float *restrict output,
+                               uint32_t k,
+                               uint32_t n,
+                               int start_row,
+                               int end_row) {
+	// 只遍历分配给该线程的行
+	for (int i = start_row; i < end_row; i++) {
+		for (int j = 0; j < n; j++) {
+            float sum_vectorized = 0.0f;
+			float *ptrA = input_matrix1 + i * k;
+			float *ptrB = input_matrix2 + j * k;
+			int l = 0;
+
+			if (k >= HVX_VECTOR_WIDTH_FLOATS) {
+				HVX_Vector vSum = Q6_V_vzero();
+				for (; l + (HVX_VECTOR_WIDTH_FLOATS - 1) < k; l += HVX_VECTOR_WIDTH_FLOATS) {
+					HVX_Vector vA, vB;
+					memcpy(&vA, ptrA + l, sizeof(HVX_Vector));
+					memcpy(&vB, ptrB + l, sizeof(HVX_Vector));
+
+					if (j + 1 < n) {
+						Q6_dcfetch_A(input_matrix2 + (j + 1) * k + l);
+					}
+
+					vSum = Q6_Vqf32_vadd_Vqf32Vqf32(vSum, Q6_Vqf32_vmpy_VsfVsf(vA, vB));
+				}
+
+				vSum = Q6_Vqf32_vadd_Vqf32Vqf32(vSum, Q6_V_vror_VR(vSum, 16 * sizeof(float)));
+				vSum = Q6_Vqf32_vadd_Vqf32Vqf32(vSum, Q6_V_vror_VR(vSum, 8 * sizeof(float)));
+				vSum = Q6_Vqf32_vadd_Vqf32Vqf32(vSum, Q6_V_vror_VR(vSum, 4 * sizeof(float)));
+				vSum = Q6_Vqf32_vadd_Vqf32Vqf32(vSum, Q6_V_vror_VR(vSum, 2 * sizeof(float)));
+				vSum = Q6_Vqf32_vadd_Vqf32Vqf32(vSum, Q6_V_vror_VR(vSum, 1 * sizeof(float)));
+
+				HVX_Vector vFinalSum_sf = Q6_Vsf_equals_Vqf32(vSum);
+				sum_vectorized = ((float *)&vFinalSum_sf)[0];
+			}
+
+            float sum_scalar = 0.0f;
+			for (; l < k; l++) {
+				sum_scalar += ptrA[l] * ptrB[l];
+			}
+
+			output[i * n + j] = sum_vectorized + sum_scalar;
+		}
+	}
+}
+
+
+/**
+ * @brief QuRT工作线程的入口函数
+ * @param arg 指向 matmul_thread_data_t 结构体的指针
+ */
+static void matmul_worker_thread(void *arg) {
+    matmul_thread_data_t *data = (matmul_thread_data_t *)arg;
+
+    matmul_worker_task(data->input_matrix1, data->input_matrix2, data->output,
+                       data->k, data->n, data->start_row, data->end_row);
+
+    qurt_thread_exit(0);
+}
+
+/**
+ * @brief 多线程矩阵乘法的主函数
+ * @param input_matrix1 输入矩阵A (m x k)
+ * @param input_matrix2 输入矩阵B (n x k, B已经转置)
+ * @param output        输出矩阵C (m x n)
+ * @param m             矩阵A的行数
+ * @param k             矩阵A的列数 / 矩阵B的列数
+ * @param n             矩阵B的行数
+ */
+void matmul_ijk_hvx_transposed_b_multithreaded(float *restrict input_matrix1,
+                              float *restrict input_matrix2,
+                              float *restrict output,
+                              uint32_t m,
+                              uint32_t k,
+                              uint32_t n) {
+    if (k == 0) {
+        for(int i = 0; i < m * n; ++i) {
+            output[i] = 0.0f;
+        }
+        return;
+    }
+    
+    if (m < NUM_THREADS) {
+        matmul_worker_task(input_matrix1, input_matrix2, output, k, n, 0, m);
+        return;
+    }
+
+    qurt_thread_t threads[NUM_THREADS];
+    qurt_thread_attr_t attrs[NUM_THREADS];
+    matmul_thread_data_t thread_data[NUM_THREADS];
+    void* stacks[NUM_THREADS];
+
+    int rows_per_thread = m / NUM_THREADS;
+    int start_row = 0;
+
+    for (int i = 0; i < NUM_THREADS; ++i) {
+        stacks[i] = malloc(STACK_SIZE);
+        if (stacks[i] == NULL) {
+            printf("Error: Failed to allocate stack for thread %d\n", i);
+            return; 
+        }
+
+        int end_row = start_row + rows_per_thread;
+        if (i == NUM_THREADS - 1) {
+            end_row = m;
+        }
+
+        thread_data[i] = (matmul_thread_data_t){
+            .input_matrix1 = input_matrix1,
+            .input_matrix2 = input_matrix2,
+            .output = output,
+            .m = m, .k = k, .n = n,
+            .start_row = start_row,
+            .end_row = end_row,
+            .thread_id = i
+        };
+
+        qurt_thread_attr_init(&attrs[i]);
+        qurt_thread_attr_set_stack_addr(&attrs[i], stacks[i]);
+        qurt_thread_attr_set_stack_size(&attrs[i], STACK_SIZE);
+        qurt_thread_attr_set_detachstate(&attrs[i], QURT_THREAD_ATTR_CREATE_JOINABLE);
+        char thread_name[16];
+        snprintf(thread_name, sizeof(thread_name), "matmul_%d", i);
+        qurt_thread_attr_set_name(&attrs[i], thread_name);
+
+        int ret = qurt_thread_create(&threads[i], &attrs[i], matmul_worker_thread, &thread_data[i]);
+        if (ret != QURT_EOK) {
+            printf("Error: Failed to create thread %d, error code: %d\n", i, ret);
+            free(stacks[i]);
+            return;
+        }
+
+        start_row = end_row;
+    }
+
+    for (int i = 0; i < NUM_THREADS; ++i) {
+        int status;
+        int ret = qurt_thread_join(threads[i], &status);
+        if (ret != QURT_EOK) {
+            printf("Error: Failed to join thread %d, error code: %d\n", i, ret);
+        }
+    }
+
+    for (int i = 0; i < NUM_THREADS; ++i) {
+        free(stacks[i]);
+    }
+
+    return;
 }
 
 static inline void matmul_ikj_hvx_one_block(float *restrict input_matrix1,
@@ -733,7 +915,7 @@ int calculator_gemm(remote_handle64 h,
 	}
 
 	if (transY) {
-		matmul_ijk_hvx_transposed_b((float*)input_matrix1, 
+		matmul_ijk_hvx_transposed_b_multithreaded((float*)input_matrix1, 
 								(float*)input_matrix2, 
 								output, m, k, n);
 	} else {

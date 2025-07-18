@@ -134,22 +134,14 @@ void calL2Hexagon(
     uint64_t* outIndices,
     const float* yNorm
 ) {
-    if (nx == 0 || ny == 0)
+    if (nx == 0 || ny == 0 || k == 0) {
         return;
+    }
 
-    // block size
-    const size_t bs_x = 4096;
-    const size_t bs_y = 1024;
-    std::unique_ptr<float[]> ip_block(new float[bs_x * bs_y]);
     std::unique_ptr<float[]> x_norms(new float[nx]);
-    std::unique_ptr<float[]> del2;
-
-    // 临时储存中间结果
-    std::vector<std::pair<float, uint64_t>> tmpSort(nx * ny, std::make_pair(HUGE_VALF, 1));
-
-    // 计算x的范数
     fvec_norms_L2sqr(x_norms.get(), x, dim, nx);
 
+    std::unique_ptr<float[]> del2;
     if (!yNorm) {
         float* y_norms2 = new float[ny];
         del2.reset(y_norms2);
@@ -157,71 +149,85 @@ void calL2Hexagon(
         yNorm = y_norms2;
     }
 
-    // 计算最终距离，外循环每次移动bs_x个元素，内循环每次移动bs_y个元素
+	// 内存限制: 12 MB
+    const size_t MEM_LIMIT_BYTES = 12 * 1024 * 1024;
+    const size_t MEM_LIMIT_FLOATS = MEM_LIMIT_BYTES / sizeof(float);
+
+    size_t bs_x = 1024;
+    if (bs_x > nx) bs_x = nx;
+
+    size_t bs_y;
+    if (bs_x * dim >= MEM_LIMIT_FLOATS) {
+        bs_x = MEM_LIMIT_FLOATS / (dim + 1);
+        if (bs_x == 0) bs_x = 1;
+    }
+    
+    size_t remaining_mem = MEM_LIMIT_FLOATS - bs_x * dim;
+    bs_y = remaining_mem / (dim + bs_x);
+    if (bs_y == 0) bs_y = 1;
+    if (bs_y > ny) bs_y = ny;
+
+    #pragma omp parallel for
     for (size_t i0 = 0; i0 < nx; i0 += bs_x) {
         size_t i1 = std::min(nx, i0 + bs_x);
-        
-        // 数据库分块
+        size_t nxi = i1 - i0;
+
+        using HeapElement = std::pair<float, uint64_t>;
+        std::vector<std::priority_queue<HeapElement>> query_heaps(nxi);
+
+        std::unique_ptr<float[]> ip_block(new float[nxi * bs_y]);
+
         for (size_t j0 = 0; j0 < ny; j0 += bs_y) {
             size_t j1 = std::min(ny, j0 + bs_y);
+            size_t nyi = j1 - j0;
 
-            // 计算实际的内积大小
-            float one = 1, zero = 0;
-            FINTEGER nyi = j1 - j0, nxi = i1 - i0, di = dim;
-            // 开始替换
             calculator_gemm_cpp(
-                x + i0 * dim,  // x的起始地址
-                y + j0 * dim,  // y的起始地址
+                x + i0 * dim,
+                y + j0 * dim,
                 nxi,
-                di,
+                dim,
                 nyi,
                 ip_block.get(),
-                false, true  // 转置参数
+                false,
+                true
             );
 
-            // 最终处理
-            for (int64_t i = i0; i < i1; ++i) {
-                float* ip_line = ip_block.get() + (i - i0) * (j1 - j0);
-                
-                for (size_t j = j0; j < j1; ++j) {
-                    float ip = ip_line[j - j0];
-                    float d = x_norms[i] + yNorm[j] - 2 * ip;
-                    
-                    if (d < 0) {
-                        d = 0; // 确保距离非负
+            for (size_t i_local = 0; i_local < nxi; ++i_local) {
+                size_t i_global = i0 + i_local;
+                const float* ip_row = ip_block.get() + i_local * nyi;
+
+                for (size_t j_local = 0; j_local < nyi; ++j_local) {
+                    size_t j_global = j0 + j_local;
+                    float ip = ip_row[j_local];
+
+                    float d = x_norms[i_global] + yNorm[j_global] - 2 * ip;
+                    d = std::max(0.0f, d);
+
+                    if (query_heaps[i_local].size() < k) {
+                        query_heaps[i_local].push({d, j_global});
+                    } else if (d < query_heaps[i_local].top().first) {
+                        query_heaps[i_local].pop();
+                        query_heaps[i_local].push({d, j_global});
                     }
-                    tmpSort[i * ny + j] = std::make_pair(d, j);
                 }
-                // 对每个i的结果进行排序
-                // std::sort(
-                //     tmpSort.begin() + i * (k + bs_y),
-                //     tmpSort.begin() + (i + 1) * (k + bs_y),
-                //     [](const std::pair<float, uint64_t>& a, const std::pair<float, uint64_t>& b) {
-                //         return a.first < b.first; // 注意这里是 <，升序
-                //     }
-                // );
+            }
+        }
 
+        for (size_t i_local = 0; i_local < nxi; ++i_local) {
+            size_t i_global = i0 + i_local;
+            auto& heap = query_heaps[i_local];
+            
+            size_t current_k = heap.size();
+            for (size_t j = 0; j < current_k; ++j) {
+                const auto& [distance, index] = heap.top();
+                size_t out_idx = i_global * k + (current_k - 1 - j);
+                outDistances[out_idx] = distance;
+                outIndices[out_idx] = index;
+                heap.pop();
             }
         }
     }
-
-    // 将结果写入输出
-    for (size_t i = 0; i < nx; ++i) {
-        // 对每个i的结果进行排序
-        std::sort(
-            tmpSort.begin() + i * ny,
-            tmpSort.begin() + (i + 1) * ny,
-            [](const std::pair<float, uint64_t>& a, const std::pair<float, uint64_t>& b) {
-                return a.first < b.first; // 注意这里是 <，升序
-            }
-        );
-
-        for (size_t j = 0; j < k; ++j) {
-            outDistances[i * k + j] = tmpSort[i * ny + j].first;
-            outIndices[i * k + j] = tmpSort[i * ny + j].second;
-        }
-    }
-} 
+}
 
 void calIPHexagon(
     const float* x,
@@ -234,60 +240,85 @@ void calIPHexagon(
     uint64_t* outIndices,
     const float* yNorm
 ) {
-    if (nx == 0 || ny == 0)
+    if (nx == 0 || ny == 0 || k == 0) {
         return;
+    }
 
-    const size_t bs_x = 4096;
-    const size_t bs_y = 1024;
-    std::unique_ptr<float[]> ip_block(new float[bs_x * bs_y]);
+    // 内存限制: 12 MB
+    const size_t MEM_LIMIT_BYTES = 12 * 1024 * 1024;
+    const size_t MEM_LIMIT_FLOATS = MEM_LIMIT_BYTES / sizeof(float);
 
-    // 临时储存中间结果
-    std::vector<std::pair<float, uint>> tmpSort(nx * (k + bs_y), std::make_pair(0.0, 1));
+    size_t bs_x = 1024;
+    if (bs_x > nx) bs_x = nx;
 
+    size_t bs_y;
+    if (bs_x * dim >= MEM_LIMIT_FLOATS) {
+        bs_x = MEM_LIMIT_FLOATS / (dim + 1);
+        if (bs_x == 0) bs_x = 1;
+    }
+    
+    size_t remaining_mem = MEM_LIMIT_FLOATS - bs_x * dim;
+    bs_y = remaining_mem / (dim + bs_x);
+    if (bs_y == 0) bs_y = 1;
+    if (bs_y > ny) bs_y = ny;
+
+    #pragma omp parallel for
     for (size_t i0 = 0; i0 < nx; i0 += bs_x) {
         size_t i1 = std::min(nx, i0 + bs_x);
+        size_t nxi = i1 - i0;
+
+        using HeapElement = std::pair<float, uint64_t>;
+        using MinHeap = std::priority_queue<HeapElement, std::vector<HeapElement>, std::greater<HeapElement>>;
+        std::vector<MinHeap> query_heaps(nxi);
+
+        std::unique_ptr<float[]> ip_block(new float[nxi * bs_y]);
 
         for (size_t j0 = 0; j0 < ny; j0 += bs_y) {
             size_t j1 = std::min(ny, j0 + bs_y);
+            size_t nyi = j1 - j0;
 
-            // 计算内积
-            float one = 1, zero = 0;
-            FINTEGER nyi = j1 - j0, nxi = i1 - i0, di = dim;
             calculator_gemm_cpp(
-                x + i0 * dim,  // x的起始地址
-                y + j0 * dim,  // y的起始地址
+                x + i0 * dim,
+                y + j0 * dim,
                 nxi,
-                di,
+                dim,
                 nyi,
                 ip_block.get(),
-                false, true  // 转置参数
+                false,
+                true
             );
-            for (int64_t i = i0; i < i1; ++i) {
-                float* ip_line = ip_block.get() + (i - i0) * (j1 - j0);
 
-                for (size_t j = j0; j < j1; ++j) {
-                    tmpSort[i * (k + bs_y) + k + j - j0] = std::make_pair(ip_line[j - j0], j);
-                }
-                // 对每个i的结果进行排序
-                std::partial_sort(
-                    tmpSort.begin() + i * (k + bs_y),
-                    tmpSort.begin() + i * (k + bs_y) + k,
-                    tmpSort.begin() + (i + 1) * (k + bs_y),
-                    [](const std::pair<float, uint64_t>& a, const std::pair<float, uint64_t>& b) {
-                        return a.first > b.first; // 注意这里是 >，降序
+            for (size_t i_local = 0; i_local < nxi; ++i_local) {
+                const float* ip_row = ip_block.get() + i_local * nyi;
+                for (size_t j_local = 0; j_local < nyi; ++j_local) {
+                    float ip = ip_row[j_local];
+                    size_t j_global = j0 + j_local;
+
+                    if (query_heaps[i_local].size() < k) {
+                        query_heaps[i_local].push({ip, j_global});
+                    } else if (ip > query_heaps[i_local].top().first) {
+                        query_heaps[i_local].pop();
+                        query_heaps[i_local].push({ip, j_global});
                     }
-                );
+                }
             }
         }
-    }
-    // 将结果写入输出
-    for (size_t i = 0; i < nx; ++i) {
-        for (size_t j = 0; j < k; ++j) {
-            outDistances[i * k + j] = tmpSort[i * (k + bs_y) + j].first;
-            outIndices[i * k + j] = tmpSort[i * (k + bs_y) + j].second;
-        }
-    }
 
+        for (size_t i_local = 0; i_local < nxi; ++i_local) {
+            size_t i_global = i0 + i_local;
+            MinHeap& heap = query_heaps[i_local];
+            
+            size_t current_k = heap.size();
+            for (size_t j = 0; j < current_k; ++j) {
+                const auto& [ip_value, index] = heap.top();
+
+                size_t out_idx = i_global * k + (current_k - 1 - j);
+                outDistances[out_idx] = ip_value;
+                outIndices[out_idx] = index;
+                heap.pop();
+            }
+        }
+    } // 结束对 x 块的并行遍历
 }
 
 void fvec_norms_L2sqr (
